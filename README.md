@@ -88,7 +88,7 @@ everything else in the app works fine without this step.
 
 ## 5. Deploy to Vercel
 
-1. Push this folder to a GitHub repo.
+1. Push this folder to a GitLab (or GitHub) repo.
 2. In [vercel.com](https://vercel.com), "Add New Project" and import that repo.
 3. Under the project's Environment Variables, add:
    - `NEXT_PUBLIC_SUPABASE_URL`
