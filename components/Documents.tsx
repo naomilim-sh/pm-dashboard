@@ -72,6 +72,9 @@ export default function Documents({
     setNewValue("");
   }
 
+  const links = documents.filter((d) => d.link_url);
+  const drafts = documents.filter((d) => !d.link_url);
+
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
@@ -81,24 +84,23 @@ export default function Documents({
         </span>
       </div>
 
-      <div className="space-y-2">
-        {documents.map((d) => {
-          if (d.link_url) {
+      {links.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {links.map((d) => {
             const isRenaming = !readOnly && renamingId === d.id;
             return (
               <div
                 key={d.id}
-                className="group flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm hover:border-slate-300 hover:shadow-sm"
+                className="group flex items-center gap-1 rounded-md border border-slate-200 bg-white p-1"
               >
                 {isRenaming ? (
                   <form
-                    className="flex flex-1 items-center gap-2"
-                    onSubmit={async (e) => {
+                    className="flex items-center"
+                    onSubmit={(e) => {
                       e.preventDefault();
                       setRenamingId(null);
                     }}
                   >
-                    <span>{displayIcon(d)}</span>
                     <input
                       autoFocus
                       defaultValue={d.link_title ?? ""}
@@ -108,46 +110,49 @@ export default function Documents({
                         if (v !== (d.link_title ?? "")) onUpdate(d.id, { link_title: v || null });
                         setRenamingId(null);
                       }}
-                      className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-slate-500 focus:outline-none"
+                      className="w-40 rounded-md border border-slate-300 px-2 py-1 text-xs focus:border-slate-500 focus:outline-none"
                     />
                   </form>
                 ) : (
                   <a
-                    href={d.link_url}
+                    href={d.link_url ?? undefined}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex flex-1 items-center gap-2 truncate"
+                    title={displayTitle(d)}
+                    className="flex h-8 w-8 items-center justify-center rounded text-lg hover:bg-slate-50"
                   >
-                    <span className="shrink-0">{displayIcon(d)}</span>
-                    <span className="truncate font-medium text-slate-700">{displayTitle(d)}</span>
-                    {d.link_kind && (
-                      <span className="shrink-0 text-xs text-slate-400">{d.link_kind}</span>
-                    )}
+                    {displayIcon(d)}
                   </a>
                 )}
 
                 {!isRenaming && !readOnly && (
-                  <div className="flex shrink-0 items-center gap-2 opacity-0 group-hover:opacity-100">
+                  <div className="hidden items-center gap-0.5 pr-1 group-hover:flex">
                     <button
                       type="button"
                       onClick={() => setRenamingId(d.id)}
-                      className="text-xs text-slate-400 hover:text-slate-700"
+                      title="Rename"
+                      className="text-xs text-slate-300 hover:text-slate-600"
                     >
-                      Rename
+                      ✎
                     </button>
                     <button
                       type="button"
                       onClick={() => onDelete(d.id)}
-                      className="text-xs text-slate-400 hover:text-red-600"
+                      title="Remove"
+                      className="text-xs text-slate-300 hover:text-red-600"
                     >
-                      Remove
+                      ✕
                     </button>
                   </div>
                 )}
               </div>
             );
-          }
+          })}
+        </div>
+      )}
 
+      <div className="space-y-2">
+        {drafts.map((d) => {
           const isOpen = openId === d.id;
           return (
             <div key={d.id} className="rounded-md border border-slate-200 bg-white">
