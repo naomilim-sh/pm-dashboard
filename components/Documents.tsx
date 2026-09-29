@@ -1,0 +1,240 @@
+"use client";
+
+import { useState } from "react";
+import { Document } from "@/lib/types";
+import { isGoogleLink } from "@/lib/googleDrive";
+
+function displayTitle(d: Document): string {
+  if (d.link_url) return d.link_title || d.link_url;
+  return d.subject.trim() || "(no subject)";
+}
+
+function displayIcon(d: Document): string {
+  if (d.link_url) return d.link_icon || "🔗";
+  return "✉️";
+}
+
+export default function Documents({
+  documents,
+  onAdd,
+  onUpdate,
+  onDelete,
+  readOnly = false,
+}: {
+  documents: Document[];
+  onAdd: (input: Partial<Document>) => Promise<void>;
+  onUpdate: (id: string, patch: Partial<Document>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  readOnly?: boolean;
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [newValue, setNewValue] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addWarning, setAddWarning] = useState<string | null>(null);
+
+  async function handleAddSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const value = newValue.trim();
+    if (!value || adding) return;
+
+    setAdding(true);
+    setAddWarning(null);
+
+    if (isGoogleLink(value)) {
+      try {
+        const res = await fetch("/api/fetch-doc-title", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: value }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error ?? "Failed to read that link.");
+        await onAdd({
+          link_url: value,
+          link_title: body.title,
+          link_kind: body.kind,
+          link_icon: body.icon,
+        });
+      } catch (err) {
+        setAddWarning(
+          `Added the link, but couldn't fetch its title (${
+            err instanceof Error ? err.message : "unknown error"
+          }). You can rename it below.`
+        );
+        await onAdd({ link_url: value, link_title: null, link_kind: null, link_icon: null });
+      }
+    } else {
+      await onAdd({ subject: value, recipients: "", body: "" });
+    }
+
+    setAdding(false);
+    setNewValue("");
+  }
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-medium text-slate-700">Documents</h3>
+        <span className="text-xs text-slate-500">
+          {documents.length === 0 ? "No documents yet" : `${documents.length} document(s)`}
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {documents.map((d) => {
+          if (d.link_url) {
+            const isRenaming = !readOnly && renamingId === d.id;
+            return (
+              <div
+                key={d.id}
+                className="group flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm hover:border-slate-300 hover:shadow-sm"
+              >
+                {isRenaming ? (
+                  <form
+                    className="flex flex-1 items-center gap-2"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      setRenamingId(null);
+                    }}
+                  >
+                    <span>{displayIcon(d)}</span>
+                    <input
+                      autoFocus
+                      defaultValue={d.link_title ?? ""}
+                      placeholder="Document title"
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v !== (d.link_title ?? "")) onUpdate(d.id, { link_title: v || null });
+                        setRenamingId(null);
+                      }}
+                      className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-slate-500 focus:outline-none"
+                    />
+                  </form>
+                ) : (
+                  <a
+                    href={d.link_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-1 items-center gap-2 truncate"
+                  >
+                    <span className="shrink-0">{displayIcon(d)}</span>
+                    <span className="truncate font-medium text-slate-700">{displayTitle(d)}</span>
+                    {d.link_kind && (
+                      <span className="shrink-0 text-xs text-slate-400">{d.link_kind}</span>
+                    )}
+                  </a>
+                )}
+
+                {!isRenaming && !readOnly && (
+                  <div className="flex shrink-0 items-center gap-2 opacity-0 group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => setRenamingId(d.id)}
+                      className="text-xs text-slate-400 hover:text-slate-700"
+                    >
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(d.id)}
+                      className="text-xs text-slate-400 hover:text-red-600"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          const isOpen = openId === d.id;
+          return (
+            <div key={d.id} className="rounded-md border border-slate-200 bg-white">
+              <button
+                type="button"
+                onClick={() => setOpenId(isOpen ? null : d.id)}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm"
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <span className="shrink-0">{displayIcon(d)}</span>
+                  <span className="truncate font-medium">{displayTitle(d)}</span>
+                </span>
+                <span className="shrink-0 text-xs text-slate-400">
+                  {isOpen ? "Collapse" : "Expand"}
+                </span>
+              </button>
+
+              {isOpen && (
+                <div className="space-y-2 border-t border-slate-100 p-3">
+                  <input
+                    defaultValue={d.subject}
+                    placeholder="Subject"
+                    readOnly={readOnly}
+                    onBlur={(e) =>
+                      !readOnly &&
+                      e.target.value !== d.subject &&
+                      onUpdate(d.id, { subject: e.target.value })
+                    }
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+                  />
+                  <input
+                    defaultValue={d.recipients}
+                    placeholder="Recipients (optional)"
+                    readOnly={readOnly}
+                    onBlur={(e) =>
+                      !readOnly &&
+                      e.target.value !== d.recipients &&
+                      onUpdate(d.id, { recipients: e.target.value })
+                    }
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+                  />
+                  <textarea
+                    defaultValue={d.body}
+                    placeholder="Draft body..."
+                    rows={8}
+                    readOnly={readOnly}
+                    onBlur={(e) =>
+                      !readOnly && e.target.value !== d.body && onUpdate(d.id, { body: e.target.value })
+                    }
+                    className="w-full rounded-md border border-slate-300 p-3 text-sm focus:border-slate-500 focus:outline-none"
+                  />
+                  {!readOnly && (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => onDelete(d.id)}
+                        className="text-xs text-slate-400 hover:text-red-600"
+                      >
+                        Delete draft
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {!readOnly && (
+        <form onSubmit={handleAddSubmit} className="mt-3 flex items-center gap-2">
+          <input
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+            placeholder="Paste a Google Doc/Slides/Sheet link, or type an email draft subject..."
+            className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={adding || !newValue.trim()}
+            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+          >
+            {adding ? "Adding..." : "+ Add"}
+          </button>
+        </form>
+      )}
+      {addWarning && <p className="mt-1 text-xs text-amber-600">{addWarning}</p>}
+    </div>
+  );
+}

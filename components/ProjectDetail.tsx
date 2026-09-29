@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import { createClient } from "@/lib/supabase/client";
-import { EmailDraft, Project, TrackerItem, TrackerItemStatus } from "@/lib/types";
+import { Document, Project, TrackerItem, TrackerItemStatus, resolvePercent } from "@/lib/types";
 import CompletionBadge from "@/components/CompletionBadge";
 import TrackerTable from "@/components/TrackerTable";
-import EmailDrafts from "@/components/EmailDrafts";
+import Documents from "@/components/Documents";
 import SheetSync from "@/components/SheetSync";
 import GoogleConnect from "@/components/GoogleConnect";
 import NotesUpdate from "@/components/NotesUpdate";
@@ -16,15 +16,17 @@ import NotesUpdate from "@/components/NotesUpdate";
 export default function ProjectDetail({
   initialProject,
   initialTrackerItems,
-  initialEmailDrafts,
+  initialDocuments,
   googleConnected,
   googleEmail,
+  readOnly,
 }: {
   initialProject: Project;
   initialTrackerItems: TrackerItem[];
-  initialEmailDrafts: EmailDraft[];
+  initialDocuments: Document[];
   googleConnected: boolean;
   googleEmail: string | null;
+  readOnly: boolean;
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -33,7 +35,7 @@ export default function ProjectDetail({
 
   const [project, setProject] = useState<Project>(initialProject);
   const [trackerItems, setTrackerItems] = useState<TrackerItem[]>(initialTrackerItems);
-  const [emailDrafts, setEmailDrafts] = useState<EmailDraft[]>(initialEmailDrafts);
+  const [documents, setDocuments] = useState<Document[]>(initialDocuments);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [showNotesUpdate, setShowNotesUpdate] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -174,28 +176,38 @@ export default function ProjectDetail({
     }
   }
 
-  async function handleAddDraft() {
+  async function handleAddDocument(input: Partial<Document>) {
     const { data, error } = await supabase
-      .from("email_drafts")
-      .insert({ project_id: project.id, subject: "", recipients: "", body: "" })
+      .from("documents")
+      .insert({
+        project_id: project.id,
+        subject: "",
+        recipients: "",
+        body: "",
+        link_url: null,
+        link_title: null,
+        link_kind: null,
+        link_icon: null,
+        ...input,
+      })
       .select()
       .single();
     if (!error && data) {
-      setEmailDrafts((prev) => [...prev, data]);
+      setDocuments((prev) => [...prev, data]);
     }
   }
 
-  async function handleUpdateDraft(id: string, patch: Partial<EmailDraft>) {
-    const { error } = await supabase.from("email_drafts").update(patch).eq("id", id);
+  async function handleUpdateDocument(id: string, patch: Partial<Document>) {
+    const { error } = await supabase.from("documents").update(patch).eq("id", id);
     if (!error) {
-      setEmailDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+      setDocuments((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
     }
   }
 
-  async function handleDeleteDraft(id: string) {
-    const { error } = await supabase.from("email_drafts").delete().eq("id", id);
+  async function handleDeleteDocument(id: string) {
+    const { error } = await supabase.from("documents").delete().eq("id", id);
     if (!error) {
-      setEmailDrafts((prev) => prev.filter((d) => d.id !== id));
+      setDocuments((prev) => prev.filter((d) => d.id !== id));
     }
   }
 
@@ -238,7 +250,7 @@ export default function ProjectDetail({
               total={trackerItems.length}
               sheetPercent={project.tracker_percent_cached}
             />
-            {canSync && (
+            {!readOnly && canSync && (
               <button
                 type="button"
                 onClick={handleSyncNow}
@@ -251,34 +263,56 @@ export default function ProjectDetail({
             )}
           </div>
 
-          {confirmingDelete ? (
-            <div className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-1.5 text-sm">
-              <span className="text-red-700">Delete this project?</span>
+          {!readOnly &&
+            (confirmingDelete ? (
+              <div className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-1.5 text-sm">
+                <span className="text-red-700">Delete this project?</span>
+                <button
+                  type="button"
+                  onClick={handleDeleteProject}
+                  className="font-medium text-red-700 hover:underline"
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(false)}
+                  className="text-slate-500 hover:underline"
+                >
+                  No
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
-                onClick={handleDeleteProject}
-                className="font-medium text-red-700 hover:underline"
+                onClick={() => setConfirmingDelete(true)}
+                className="text-sm text-slate-400 hover:text-red-600"
               >
-                Yes
+                Delete project
               </button>
-              <button
-                type="button"
-                onClick={() => setConfirmingDelete(false)}
-                className="text-slate-500 hover:underline"
-              >
-                No
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmingDelete(true)}
-              className="text-sm text-slate-400 hover:text-red-600"
-            >
-              Delete project
-            </button>
-          )}
+            ))}
         </div>
+
+        {(() => {
+          const percent = resolvePercent({ done, total: trackerItems.length }, project.tracker_percent_cached);
+          if (project.tracker_percent_cached !== null) {
+            return (
+              <p className="mt-2 text-xs text-slate-400">
+                Showing {percent}% synced from your linked Google Sheet — this takes priority
+                over tracker-task completion while it's set.
+              </p>
+            );
+          }
+          if (trackerItems.length > 0) {
+            return (
+              <p className="mt-2 text-xs text-slate-400">
+                Showing {percent}% based on {done}/{trackerItems.length} tracker tasks done — no
+                Google Sheet % synced yet.
+              </p>
+            );
+          }
+          return null;
+        })()}
 
         {syncError && (
           <p className="mt-2 text-sm text-red-600">{syncError}</p>
@@ -287,29 +321,37 @@ export default function ProjectDetail({
         <div className="mt-4 flex flex-wrap gap-6">
           <label className="flex items-center gap-2 text-sm text-slate-600">
             Start date
-            <input
-              key={project.start_date ?? "empty"}
-              type="date"
-              defaultValue={project.start_date ?? ""}
-              onBlur={(e) =>
-                e.target.value !== (project.start_date ?? "") &&
-                handleFieldChange({ start_date: e.target.value || null })
-              }
-              className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-            />
+            {readOnly ? (
+              <span className="text-slate-500">{project.start_date ?? "—"}</span>
+            ) : (
+              <input
+                key={project.start_date ?? "empty"}
+                type="date"
+                defaultValue={project.start_date ?? ""}
+                onBlur={(e) =>
+                  e.target.value !== (project.start_date ?? "") &&
+                  handleFieldChange({ start_date: e.target.value || null })
+                }
+                className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+              />
+            )}
           </label>
           <label className="flex items-center gap-2 text-sm text-slate-600">
             ETA
-            <input
-              key={project.eta ?? "empty"}
-              type="date"
-              defaultValue={project.eta ?? ""}
-              onBlur={(e) =>
-                e.target.value !== (project.eta ?? "") &&
-                handleFieldChange({ eta: e.target.value || null })
-              }
-              className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-            />
+            {readOnly ? (
+              <span className="text-slate-500">{project.eta ?? "—"}</span>
+            ) : (
+              <input
+                key={project.eta ?? "empty"}
+                type="date"
+                defaultValue={project.eta ?? ""}
+                onBlur={(e) =>
+                  e.target.value !== (project.eta ?? "") &&
+                  handleFieldChange({ eta: e.target.value || null })
+                }
+                className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+              />
+            )}
           </label>
         </div>
 
@@ -317,13 +359,15 @@ export default function ProjectDetail({
           <section>
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-medium text-slate-700">README / Instructions</h3>
-              <button
-                type="button"
-                onClick={() => setShowNotesUpdate((v) => !v)}
-                className="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white"
-              >
-                {showNotesUpdate ? "Cancel update" : "Update notes"}
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => setShowNotesUpdate((v) => !v)}
+                  className="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white"
+                >
+                  {showNotesUpdate ? "Cancel update" : "Update notes"}
+                </button>
+              )}
             </div>
 
             <div className="prose prose-sm max-w-none rounded-md border border-slate-200 bg-white p-4">
@@ -334,7 +378,7 @@ export default function ProjectDetail({
               )}
             </div>
 
-            {showNotesUpdate && (
+            {!readOnly && showNotesUpdate && (
               <div className="mt-4">
                 <NotesUpdate
                   projectId={project.id}
@@ -353,13 +397,15 @@ export default function ProjectDetail({
           <section>
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-medium text-slate-700">Google Sheet tracker</h3>
-              <GoogleConnect
-                connected={googleConnected}
-                connectedEmail={googleEmail}
-                returnTo={`/projects/${project.id}`}
-              />
+              {!readOnly && (
+                <GoogleConnect
+                  connected={googleConnected}
+                  connectedEmail={googleEmail}
+                  returnTo={`/projects/${project.id}`}
+                />
+              )}
             </div>
-            <SheetSync project={project} onFieldChange={handleFieldChange} />
+            <SheetSync project={project} onFieldChange={handleFieldChange} readOnly={readOnly} />
           </section>
 
           <section>
@@ -368,15 +414,17 @@ export default function ProjectDetail({
               onAdd={handleAddTrackerItem}
               onUpdate={handleUpdateTrackerItem}
               onDelete={handleDeleteTrackerItem}
+              readOnly={readOnly}
             />
           </section>
 
           <section>
-            <EmailDrafts
-              drafts={emailDrafts}
-              onAdd={handleAddDraft}
-              onUpdate={handleUpdateDraft}
-              onDelete={handleDeleteDraft}
+            <Documents
+              documents={documents}
+              onAdd={handleAddDocument}
+              onUpdate={handleUpdateDocument}
+              onDelete={handleDeleteDocument}
+              readOnly={readOnly}
             />
           </section>
         </div>

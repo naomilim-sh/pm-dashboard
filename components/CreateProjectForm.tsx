@@ -17,7 +17,7 @@ export default function CreateProjectForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = sheetUrl.trim() && startDate && eta;
+  const canSubmit = sheetUrl.trim() && eta;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,20 +45,20 @@ export default function CreateProjectForm({
       />
       <div className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-1 text-xs text-slate-500">
-          Start
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-          />
-        </label>
-        <label className="flex items-center gap-1 text-xs text-slate-500">
-          ETA
+          ETA (required)
           <input
             type="date"
             value={eta}
             onChange={(e) => setEta(e.target.value)}
+            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+          />
+        </label>
+        <label className="flex items-center gap-1 text-xs text-slate-500">
+          Start (optional)
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
             className="rounded-md border border-slate-300 px-2 py-1 text-sm"
           />
         </label>

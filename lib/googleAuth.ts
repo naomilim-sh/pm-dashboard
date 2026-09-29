@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export const GOOGLE_OAUTH_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
+export const GOOGLE_OAUTH_SCOPE =
+  "https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.metadata.readonly";
 
 export function buildGoogleAuthUrl(redirectUri: string, state: string): string {
   const params = new URLSearchParams({

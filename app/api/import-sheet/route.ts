@@ -9,9 +9,9 @@ export async function POST(request: Request) {
   if (!sheetUrl) {
     return NextResponse.json({ error: "Missing sheetUrl." }, { status: 400 });
   }
-  if (!startDate || !eta) {
+  if (!eta) {
     return NextResponse.json(
-      { error: "Start date and ETA are required for every new project." },
+      { error: "ETA (target completion date) is required for every new project." },
       { status: 400 }
     );
   }
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     .insert({
       name: meta.spreadsheetTitle,
       tracker_sheet_url: sheetUrl,
-      start_date: startDate,
+      start_date: startDate || null,
       eta,
     })
     .select()

@@ -28,27 +28,34 @@ export default async function ProjectPage({
     redirect("/");
   }
 
-  const [{ data: trackerItems }, { data: emailDrafts }, { data: googleToken }] = await Promise.all([
+  // Not the owner but RLS still let the select through — must be a
+  // dashboard viewer (see the "*_viewer_select" policies in schema.sql).
+  const readOnly = project.user_id !== user.id;
+
+  const [{ data: trackerItems }, { data: documents }, { data: googleToken }] = await Promise.all([
     supabase
       .from("tracker_items")
       .select("*")
       .eq("project_id", id)
       .order("created_at", { ascending: true }),
     supabase
-      .from("email_drafts")
+      .from("documents")
       .select("*")
       .eq("project_id", id)
       .order("created_at", { ascending: true }),
-    supabase.from("google_tokens").select("connected_email").eq("user_id", user.id).maybeSingle(),
+    readOnly
+      ? Promise.resolve({ data: null })
+      : supabase.from("google_tokens").select("connected_email").eq("user_id", user.id).maybeSingle(),
   ]);
 
   return (
     <ProjectDetail
       initialProject={project}
       initialTrackerItems={trackerItems ?? []}
-      initialEmailDrafts={emailDrafts ?? []}
+      initialDocuments={documents ?? []}
       googleConnected={Boolean(googleToken)}
       googleEmail={googleToken?.connected_email ?? null}
+      readOnly={readOnly}
     />
   );
 }
