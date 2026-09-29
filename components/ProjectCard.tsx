@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Project, ProjectProgress, resolvePercent } from "@/lib/types";
+import { extractReadmePreview } from "@/lib/readmePreview";
 import CompletionBadge from "@/components/CompletionBadge";
 
 function formatDate(d: string | null) {
@@ -19,6 +20,7 @@ export default function ProjectCard({
   progress: ProjectProgress;
 }) {
   const percent = resolvePercent(progress, project.tracker_percent_cached);
+  const preview = extractReadmePreview(project.readme);
 
   return (
     <Link
@@ -48,6 +50,12 @@ export default function ProjectCard({
           total={progress.total}
           sheetPercent={project.tracker_percent_cached}
         />
+        {preview && (
+          <p className="mt-2 line-clamp-2 text-xs text-slate-500">
+            <span className="font-medium text-slate-400">Latest update: </span>
+            {preview}
+          </p>
+        )}
       </div>
 
       <div>
