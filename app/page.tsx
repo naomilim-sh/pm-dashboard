@@ -19,47 +19,72 @@ export default async function Home({
     redirect("/login");
   }
 
-  // Attach this login to any pending "view my dashboard" invite addressed to
-  // this exact (verified) email — a no-op once already claimed.
-  if (user.email) {
-    await supabase
-      .from("dashboard_viewers")
-      .update({ viewer_user_id: user.id })
-      .is("viewer_user_id", null)
-      .ilike("invited_email", user.email);
-  }
+  // Kicked off but not awaited yet — this only needs to land before we read
+  // viewableOwners below, so it runs alongside the other (unrelated) queries
+  // instead of blocking the whole page on a write every single load.
+  const claimPromise = user.email
+    ? supabase
+        .from("dashboard_viewers")
+        .update({ viewer_user_id: user.id })
+        .is("viewer_user_id", null)
+        .ilike("invited_email", user.email)
+    : Promise.resolve();
 
-  const [{ data: viewableOwners }, { data: myViewers }] = await Promise.all([
-    supabase
-      .from("dashboard_viewers")
-      .select("owner_user_id, owner_email")
-      .eq("viewer_user_id", user.id),
-    supabase
-      .from("dashboard_viewers")
-      .select("id, invited_email, viewer_user_id, created_at")
-      .eq("owner_user_id", user.id)
-      .order("created_at", { ascending: true }),
-  ]);
+  const viewableOwnersPromise = claimPromise.then(() =>
+    supabase.from("dashboard_viewers").select("owner_user_id, owner_email").eq("viewer_user_id", user.id)
+  );
+  const myViewersPromise = supabase
+    .from("dashboard_viewers")
+    .select("id, invited_email, viewer_user_id, created_at")
+    .eq("owner_user_id", user.id)
+    .order("created_at", { ascending: true });
 
   const isViewingOther = Boolean(view && view !== user.id);
+
+  let projects, trackerItems, googleToken, viewableOwners, myViewers;
+
+  if (isViewingOther) {
+    // activeOwnerId depends on viewableOwners here, so this path can't avoid
+    // sequencing — the common "my own dashboard" case below doesn't have
+    // this problem, since activeOwnerId is just user.id.
+    ({ data: viewableOwners } = await viewableOwnersPromise);
+    const viewedOwner = (viewableOwners ?? []).find((o) => o.owner_user_id === view);
+    const activeOwnerId = viewedOwner ? viewedOwner.owner_user_id : user.id;
+
+    [{ data: projects }, { data: trackerItems }, { data: myViewers }] = await Promise.all([
+      supabase
+        .from("projects")
+        .select("*")
+        .eq("user_id", activeOwnerId)
+        .order("created_at", { ascending: true }),
+      supabase.from("tracker_items").select("project_id, status"),
+      myViewersPromise,
+    ]);
+    googleToken = null;
+  } else {
+    [
+      { data: projects },
+      { data: trackerItems },
+      { data: googleToken },
+      { data: viewableOwners },
+      { data: myViewers },
+    ] = await Promise.all([
+      supabase
+        .from("projects")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true }),
+      supabase.from("tracker_items").select("project_id, status"),
+      supabase.from("google_tokens").select("connected_email").eq("user_id", user.id).maybeSingle(),
+      viewableOwnersPromise,
+      myViewersPromise,
+    ]);
+  }
+
   const viewedOwner = isViewingOther
     ? (viewableOwners ?? []).find((o) => o.owner_user_id === view)
     : undefined;
-  // Fall back to your own dashboard if `view` doesn't match a real, granted invite.
-  const activeOwnerId = viewedOwner ? viewedOwner.owner_user_id : user.id;
   const readOnly = Boolean(viewedOwner);
-
-  const [{ data: projects }, { data: trackerItems }, { data: googleToken }] = await Promise.all([
-    supabase
-      .from("projects")
-      .select("*")
-      .eq("user_id", activeOwnerId)
-      .order("created_at", { ascending: true }),
-    supabase.from("tracker_items").select("project_id, status"),
-    readOnly
-      ? Promise.resolve({ data: null })
-      : supabase.from("google_tokens").select("connected_email").eq("user_id", user.id).maybeSingle(),
-  ]);
 
   const ownProjectIds = new Set((projects ?? []).map((p) => p.id));
   const progressByProject: Record<string, ProjectProgress> = {};
