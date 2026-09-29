@@ -5,8 +5,7 @@ import { Document } from "@/lib/types";
 import { isGoogleLink } from "@/lib/googleDrive";
 
 function displayTitle(d: Document): string {
-  if (d.link_url) return d.link_title || d.link_url;
-  return d.subject.trim() || "(no subject)";
+  return d.link_title || d.link_url || "Untitled";
 }
 
 const KIND_COLORS: Record<string, string> = {
@@ -55,60 +54,63 @@ export default function Documents({
   onDelete: (id: string) => Promise<void>;
   readOnly?: boolean;
 }) {
-  const [openId, setOpenId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [newValue, setNewValue] = useState("");
   const [adding, setAdding] = useState(false);
   const [addWarning, setAddWarning] = useState<string | null>(null);
+
+  // Only link-type documents exist going forward — email drafts are now
+  // just Google Docs like everything else. Any older plain-text draft row
+  // (no link_url) is simply not shown; there weren't any left in production
+  // at the time this changed.
+  const links = documents.filter((d) => d.link_url);
 
   async function handleAddSubmit(e: React.FormEvent) {
     e.preventDefault();
     const value = newValue.trim();
     if (!value || adding) return;
 
+    if (!isGoogleLink(value)) {
+      setAddWarning("That doesn't look like a Google Docs/Slides/Sheets link.");
+      return;
+    }
+
     setAdding(true);
     setAddWarning(null);
 
-    if (isGoogleLink(value)) {
-      try {
-        const res = await fetch("/api/fetch-doc-title", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: value }),
-        });
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error ?? "Failed to read that link.");
-        await onAdd({
-          link_url: value,
-          link_title: body.title,
-          link_kind: body.kind,
-          link_icon: body.icon,
-        });
-      } catch (err) {
-        setAddWarning(
-          `Added the link, but couldn't fetch its title (${
-            err instanceof Error ? err.message : "unknown error"
-          }). You can rename it below.`
-        );
-        await onAdd({ link_url: value, link_title: null, link_kind: null, link_icon: null });
-      }
-    } else {
-      await onAdd({ subject: value, recipients: "", body: "" });
+    try {
+      const res = await fetch("/api/fetch-doc-title", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: value }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Failed to read that link.");
+      await onAdd({
+        link_url: value,
+        link_title: body.title,
+        link_kind: body.kind,
+        link_icon: body.icon,
+      });
+    } catch (err) {
+      setAddWarning(
+        `Added the link, but couldn't fetch its title (${
+          err instanceof Error ? err.message : "unknown error"
+        }). You can rename it below.`
+      );
+      await onAdd({ link_url: value, link_title: null, link_kind: null, link_icon: null });
     }
 
     setAdding(false);
     setNewValue("");
   }
 
-  const links = documents.filter((d) => d.link_url);
-  const drafts = documents.filter((d) => !d.link_url);
-
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-medium text-slate-700">Documents</h3>
         <span className="text-xs text-slate-500">
-          {documents.length === 0 ? "No documents yet" : `${documents.length} document(s)`}
+          {links.length === 0 ? "No documents yet" : `${links.length} document(s)`}
         </span>
       </div>
 
@@ -179,83 +181,12 @@ export default function Documents({
         </div>
       )}
 
-      <div className="space-y-2">
-        {drafts.map((d) => {
-          const isOpen = openId === d.id;
-          return (
-            <div key={d.id} className="rounded-md border border-slate-200 bg-white">
-              <button
-                type="button"
-                onClick={() => setOpenId(isOpen ? null : d.id)}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm"
-              >
-                <span className="flex items-center gap-2 truncate">
-                  <span className="shrink-0">✉️</span>
-                  <span className="truncate font-medium">{displayTitle(d)}</span>
-                </span>
-                <span className="shrink-0 text-xs text-slate-400">
-                  {isOpen ? "Collapse" : "Expand"}
-                </span>
-              </button>
-
-              {isOpen && (
-                <div className="space-y-2 border-t border-slate-100 p-3">
-                  <input
-                    defaultValue={d.subject}
-                    placeholder="Subject"
-                    readOnly={readOnly}
-                    onBlur={(e) =>
-                      !readOnly &&
-                      e.target.value !== d.subject &&
-                      onUpdate(d.id, { subject: e.target.value })
-                    }
-                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
-                  />
-                  <input
-                    defaultValue={d.recipients}
-                    placeholder="Recipients (optional)"
-                    readOnly={readOnly}
-                    onBlur={(e) =>
-                      !readOnly &&
-                      e.target.value !== d.recipients &&
-                      onUpdate(d.id, { recipients: e.target.value })
-                    }
-                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
-                  />
-                  <textarea
-                    defaultValue={d.body}
-                    placeholder="Draft body..."
-                    rows={8}
-                    readOnly={readOnly}
-                    onBlur={(e) =>
-                      !readOnly && e.target.value !== d.body && onUpdate(d.id, { body: e.target.value })
-                    }
-                    className="w-full rounded-md border border-slate-300 p-3 text-sm focus:border-slate-500 focus:outline-none"
-                  />
-                  {!readOnly && (
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => onDelete(d.id)}
-                        className="text-xs text-slate-400 hover:text-red-600"
-                      >
-                        Delete draft
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
       {!readOnly && (
-        <form onSubmit={handleAddSubmit} className="mt-3 flex items-center gap-2">
+        <form onSubmit={handleAddSubmit} className="flex items-center gap-2">
           <input
             value={newValue}
             onChange={(e) => setNewValue(e.target.value)}
-            placeholder="Paste a Google Doc/Slides/Sheet link, or type an email draft subject..."
+            placeholder="Paste a Google Doc/Slides/Sheet link..."
             className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
           />
           <button

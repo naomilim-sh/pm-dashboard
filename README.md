@@ -3,9 +3,9 @@
 A multi-user web dashboard for managing projects. The home page shows every
 project as a pill (name, completion %, start date, ETA); each pill opens a
 detail page with a README/instructions doc, a task tracker, and a documents
-list (email drafts, or pasted Google Docs/Slides/Sheets links shown by their
-title). Completion % is computed from the tracker, or pulled live from a
-linked Google Sheet if you set one up.
+list (pasted Google Docs/Slides/Sheets links, shown as small icons). Completion
+% is computed from the tracker, or pulled live from a linked Google Sheet if
+you set one up.
 
 Each signed-in user only sees their own projects (enforced by Postgres Row
 Level Security in Supabase, not just app-level filtering).
@@ -80,13 +80,13 @@ clear error; everything else in the app works fine without this step.
 ## 4. Documents
 
 Each project's detail page has a "Documents" list. Paste in a Google
-Docs/Slides/Sheets link and it fetches the file's real title (and an icon for
-its type) via the Drive API — click the entry any time to open it in a new
-tab, or "Rename" if the auto-fetched title isn't what you want (or if Drive
-couldn't be reached — see the Google Sheet sync section above for the scope
-needed). Type plain text instead of a link to create an old-style email
-draft (subject/recipients/body, edited inline) — no Google connection
-required for that.
+Docs/Slides/Sheets link (this covers email drafts too — write them as a
+Google Doc and link it here) and it fetches the file's real title, shown as a
+small colored icon by type (hover for the name, click to open). It fetches
+the title via the Drive API, so it needs the scope described in the Google
+Sheet sync section above — if that's missing it still adds the link, just
+falls back to showing the raw URL as the hover text, and you can "Rename" it
+yourself.
 
 ## 5. Update from notes (optional)
 
@@ -123,11 +123,26 @@ everything else in the app works fine without this step.
    own Google account, and manage their own projects — RLS keeps everyone's
    data separate automatically.
 
+## 7. Manager access (read-only dashboard sharing)
+
+The "Manager access" panel on your home page lets you invite someone (e.g.
+your manager) to view your *entire* dashboard, read-only — useful for a
+recurring catch-up. Enter their email and click Invite:
+
+- It emails them a one-click magic sign-in link (no password to set).
+- Once they sign in with that email (via the link, or by signing up/logging
+  in manually with it later), they see a "Viewing: [your email]" switcher
+  appear on their own home page and can flip to your dashboard any time.
+- Access is permanent until you click "Revoke" — there's no expiry on the
+  grant itself (only the emailed link expires, per Supabase's normal
+  magic-link expiry).
+- They see everything read-only: no edit, delete, sync, or add controls
+  anywhere, on the dashboard or any project page.
+
+This needs no extra setup beyond the base schema — it's backed by RLS
+policies on the existing tables plus a small `dashboard_viewers` table, with
+no service-role key involved.
+
 ## Notes / follow-ups worth considering later
 
-- Sharing a project with another PM (read-only or edit) isn't implemented —
-  currently projects are strictly private to their creator. If needed, add a
-  `project_members` join table and extend the RLS policies.
-- Email drafts (the non-link kind of document) are stored as text only;
-  there's no "send email" integration.
 - Sheet sync is manual (a "Sync now" button), not on a schedule.
