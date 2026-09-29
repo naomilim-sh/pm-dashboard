@@ -234,3 +234,14 @@ create policy "dashboard_viewers_claim_own_invite" on public.dashboard_viewers
   for update
   using (viewer_user_id is null and lower(invited_email) = lower(public.my_email()))
   with check (viewer_user_id = auth.uid() and lower(invited_email) = lower(public.my_email()));
+
+-- Postgres RLS for UPDATE also requires the row to be visible under an
+-- applicable SELECT policy (to identify the row in the first place),
+-- separate from the UPDATE policy's own USING clause — without this, the
+-- claim above silently matches zero rows via PostgREST even though the
+-- expression itself is correct. Harmless to expose: it only reveals a
+-- not-yet-claimed invite that's already addressed to this exact person.
+drop policy if exists "dashboard_viewers_claim_own_invite_select" on public.dashboard_viewers;
+create policy "dashboard_viewers_claim_own_invite_select" on public.dashboard_viewers
+  for select
+  using (viewer_user_id is null and lower(invited_email) = lower(public.my_email()));
