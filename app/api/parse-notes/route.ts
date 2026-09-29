@@ -79,12 +79,13 @@ ${previousNotes ? previousNotes : "(none — this is the first update for this p
 ## New notes just written
 ${newNotes}
 
-Compare the new notes to the previous notes and the current tasks. Figure out:
-1. Which existing tasks (by id) changed status, owner, or deadline based on what's newly written. Only include a task if something in the new notes actually indicates a change — don't include tasks that are unmentioned or unchanged. IMPORTANT: if a task is now finished, set new_status to "done" — it will be *removed* from the tracker entirely (not left sitting there marked done), so the tracker stays a clean list of what's still pending.
-2. Any new action items mentioned in the notes that aren't already tracked as a task — propose them as new tasks.
-3. The README should always read as a current, concise snapshot of what's pending and important — never a dated changelog. Rewrite it (readme_summary) as the FULL new README text: carry forward anything still relevant, remove or rewrite bullet points about items that are now resolved (don't just keep appending "Update — <date>" sections), and fold in new context/decisions from the notes. Return null only if truly nothing about it needs to change.
+Compare the new notes to the previous notes and the current tasks — actually diff them, don't just scan the new notes in isolation. Figure out:
+1. Which existing tasks (by id) changed status, owner, or deadline based on what's newly written. IMPORTANT: if a task is now finished, set new_status to "done" — it will be *removed* from the tracker entirely (not left sitting there marked done), so the tracker stays a clean list of what's still pending.
+2. Deletions by omission: if a task's topic was described in the *previous* notes but has been removed — no longer mentioned anywhere in the *new* notes — treat that omission itself as a done/resolved signal, even though nothing explicitly says "done" or "finished". These notes represent a full rewritten snapshot each time the PM updates them, so deliberately cutting a chunk means it's no longer active — set new_status to "done" for the corresponding task(s) just as if it had been stated outright. Only hold back on this if the new notes are obviously a short one-off aside about a single unrelated thing rather than a rewritten summary (e.g. much shorter and narrower in scope than the previous notes) — when genuinely unsure, prefer treating a dropped topic as resolved. Tasks that were never mentioned in the previous notes either are simply unrelated to this diff and should be left alone.
+3. Any new action items mentioned in the notes that aren't already tracked as a task — propose them as new tasks.
+4. The README should always read as a current, concise snapshot of what's pending and important — never a dated changelog, and never carrying forward content about a topic that was dropped from the notes per point 2 above. Rewrite it (readme_summary) as the FULL new README text: carry forward anything still relevant, drop or rewrite bullet points about items that are now resolved or removed (don't just keep appending "Update — <date>" sections), and fold in new context/decisions from the notes. Return null only if truly nothing about it needs to change.
 
-Do not invent information that isn't in the notes. Every tracker_updates and new_tasks entry needs a short "reason" grounded in the actual note text.`;
+Do not invent information that isn't in the notes. Every tracker_updates and new_tasks entry needs a short "reason" grounded in the actual note text — for a deletion-by-omission, say so explicitly (e.g. "no longer mentioned in the new notes; was present before").`;
 }
 
 export async function POST(request: Request) {
