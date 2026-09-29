@@ -23,6 +23,7 @@ export default function DashboardSharing({
   const [email, setEmail] = useState("");
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [viewers, setViewers] = useState(myViewers);
 
   async function handleInvite(e: React.FormEvent) {
@@ -31,29 +32,25 @@ export default function DashboardSharing({
     if (!value || inviting) return;
     setInviting(true);
     setError(null);
+    setNotice(null);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user?.email) {
-      setError("Not signed in.");
-      setInviting(false);
-      return;
-    }
+    const res = await fetch("/api/invite-viewer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: value }),
+    });
+    const body = await res.json();
 
-    const { data, error: insertError } = await supabase
-      .from("dashboard_viewers")
-      .insert({ owner_user_id: user.id, owner_email: user.email, invited_email: value })
-      .select()
-      .single();
-
-    if (insertError) {
-      setError(
-        insertError.message.includes("duplicate") ? "Already invited." : insertError.message
-      );
-    } else if (data) {
-      setViewers((prev) => [...prev, data]);
+    if (!res.ok) {
+      setError(body.error ?? "Invite failed.");
+    } else {
+      setViewers((prev) => [...prev, body.viewer]);
       setEmail("");
+      setNotice(
+        body.emailSent
+          ? `Sign-in link emailed to ${value}.`
+          : `Invited, but the sign-in email failed to send (${body.emailError}). They can still sign up manually.`
+      );
     }
     setInviting(false);
   }
@@ -148,9 +145,10 @@ export default function DashboardSharing({
               </button>
             </form>
             {error && <p className="text-xs text-red-600">{error}</p>}
+            {notice && <p className="text-xs text-green-700">{notice}</p>}
             <p className="text-xs text-slate-400">
-              They&apos;ll see your whole dashboard read-only once they sign up or log in with
-              this email.
+              Inviting emails them a sign-in link — they&apos;ll see your whole dashboard
+              read-only once they click it (or sign up/log in manually with this email).
             </p>
           </div>
         </details>
