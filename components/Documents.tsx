@@ -9,9 +9,37 @@ function displayTitle(d: Document): string {
   return d.subject.trim() || "(no subject)";
 }
 
-function displayIcon(d: Document): string {
-  if (d.link_url) return d.link_icon || "🔗";
-  return "✉️";
+const KIND_COLORS: Record<string, string> = {
+  "Google Doc": "#4285F4",
+  "Google Sheet": "#0F9D58",
+  "Google Slides": "#F4B400",
+  "Google Form": "#673AB7",
+  PDF: "#EA4335",
+};
+
+function LinkIcon({ kind }: { kind: string | null }) {
+  if (!kind || !(kind in KIND_COLORS)) {
+    return (
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden>
+        <path
+          d="M9 15l6-6M10 6.5l.7-.7a4 4 0 1 1 5.7 5.7l-1.7 1.7M14 17.5l-.7.7a4 4 0 1 1-5.7-5.7l1.7-1.7"
+          stroke="#94A3B8"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden>
+      <path
+        d="M6 3.5A1.5 1.5 0 0 1 7.5 2H14l4 4v14.5A1.5 1.5 0 0 1 16.5 22h-9A1.5 1.5 0 0 1 6 20.5v-17z"
+        fill={KIND_COLORS[kind]}
+      />
+      <path d="M14 2v4h4" fill="#fff" fillOpacity={0.35} />
+    </svg>
+  );
 }
 
 export default function Documents({
@@ -119,9 +147,9 @@ export default function Documents({
                     target="_blank"
                     rel="noopener noreferrer"
                     title={displayTitle(d)}
-                    className="flex h-8 w-8 items-center justify-center rounded text-lg hover:bg-slate-50"
+                    className="flex h-8 w-8 items-center justify-center rounded hover:bg-slate-50"
                   >
-                    {displayIcon(d)}
+                    <LinkIcon kind={d.link_kind} />
                   </a>
                 )}
 
@@ -162,7 +190,7 @@ export default function Documents({
                 className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm"
               >
                 <span className="flex items-center gap-2 truncate">
-                  <span className="shrink-0">{displayIcon(d)}</span>
+                  <span className="shrink-0">✉️</span>
                   <span className="truncate font-medium">{displayTitle(d)}</span>
                 </span>
                 <span className="shrink-0 text-xs text-slate-400">
