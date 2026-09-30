@@ -11,8 +11,8 @@ const STATUS_OPTIONS: { value: TrackerItemStatus; label: string }[] = [
 
 const STATUS_STYLES: Record<TrackerItemStatus, string> = {
   todo: "bg-slate-100 text-slate-500",
-  in_progress: "bg-blue-100 text-blue-700",
-  done: "bg-green-100 text-green-700",
+  in_progress: "bg-shopee-50 text-shopee-700",
+  done: "bg-emerald-50 text-emerald-700",
 };
 
 function autoGrow(el: HTMLTextAreaElement | null) {
@@ -57,13 +57,13 @@ export default function TrackerTable({
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-slate-700">Tracker</h3>
+        <h3 className="text-sm font-bold uppercase tracking-wider text-navy-800">Tracker</h3>
         <span className="text-xs text-slate-500">
           {items.length === 0 ? "No tasks yet" : `${done}/${items.length} tasks done`}
         </span>
       </div>
 
-      <div className="divide-y divide-slate-100 rounded-md border border-slate-200 bg-white">
+      <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
         {items.map((item) => {
           const overdue = isOverdue(item);
           return (
@@ -81,7 +81,7 @@ export default function TrackerTable({
                 title={item.status === "done" ? "Mark as not done" : "Mark as done"}
                 className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs ${
                   item.status === "done"
-                    ? "border-green-600 bg-green-600 text-white"
+                    ? "border-emerald-500 bg-emerald-500 text-white"
                     : "border-slate-300 text-transparent hover:border-slate-400"
                 } ${readOnly ? "cursor-default" : ""}`}
               >
@@ -177,21 +177,21 @@ export default function TrackerTable({
             value={task}
             onChange={(e) => setTask(e.target.value)}
             placeholder="New task"
-            className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+            className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-shopee focus:outline-none"
           />
           <input
             value={owner}
             onChange={(e) => setOwner(e.target.value)}
             placeholder="Owner"
-            className="w-32 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+            className="w-32 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-shopee focus:outline-none"
           />
           <input
             type="date"
             value={deadline}
             onChange={(e) => setDeadline(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-shopee focus:outline-none"
           />
-          <button type="submit" className="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white">
+          <button type="submit" className="rounded-lg bg-shopee px-3 py-1.5 text-sm font-bold text-white hover:bg-shopee-600">
             Add
           </button>
         </form>

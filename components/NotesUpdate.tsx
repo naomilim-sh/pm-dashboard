@@ -129,21 +129,25 @@ export default function NotesUpdate({
 
   return (
     <div>
-      <h3 className="mb-2 text-sm font-medium text-slate-700">Update from notes</h3>
+      <h3 className="text-sm font-bold uppercase tracking-wider text-navy-800">✨ Smart Notes</h3>
+      <p className="mb-2 mt-0.5 text-xs text-slate-500">
+        Paste rough notes — bullet points, a chat log, anything. You&apos;ll get a list of proposed
+        changes to approve or skip.
+      </p>
       <textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         rows={6}
-        placeholder="Paste your quick notes here..."
-        className="w-full rounded-md border border-slate-300 p-3 text-sm focus:border-slate-500 focus:outline-none"
+        placeholder={"e.g.\n- API migration done, Priya confirmed\n- Wei to send vendor contract by Fri\n- New: security review with infra team, owner Sam, due 15 Nov"}
+        className="w-full rounded-xl border border-slate-300 p-3 text-sm placeholder:text-slate-400 focus:border-shopee focus:outline-none"
       />
       <button
         type="button"
         onClick={handleAnalyze}
         disabled={!notes.trim() || analyzing}
-        className="mt-2 rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+        className="mt-2 rounded-lg bg-shopee px-3 py-1.5 text-sm font-bold text-white hover:bg-shopee-600 disabled:opacity-40"
       >
-        {analyzing ? "Analyzing..." : "Analyze updates"}
+        {analyzing ? "Reading your notes..." : "✨ Suggest updates"}
       </button>
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
@@ -227,7 +231,7 @@ export default function NotesUpdate({
               type="button"
               onClick={handleApply}
               disabled={applying}
-              className="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+              className="rounded-lg bg-shopee px-3 py-1.5 text-sm font-bold text-white hover:bg-shopee-600 disabled:opacity-40"
             >
               {applying ? "Applying..." : "Apply selected changes"}
             </button>

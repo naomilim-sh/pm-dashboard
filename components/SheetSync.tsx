@@ -156,7 +156,7 @@ export default function SheetSync({
   }
 
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+    <div>
       <div className="mb-2 flex items-center justify-between gap-2">
         <label className="text-xs font-medium text-slate-500">Google Sheet URL</label>
         {syncedAtLabel && (
@@ -259,7 +259,7 @@ export default function SheetSync({
           type="button"
           onClick={handleSave}
           disabled={saving || !isDirty}
-          className="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+          className="rounded-lg bg-shopee px-3 py-1.5 text-sm font-bold text-white hover:bg-shopee-600 disabled:opacity-40"
         >
           {saving ? "Saving..." : "Save"}
         </button>

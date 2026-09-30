@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import { createClient } from "@/lib/supabase/client";
 import { Document, Project, TrackerItem, TrackerItemStatus, resolvePercent } from "@/lib/types";
-import CompletionBadge from "@/components/CompletionBadge";
+import { STATUS_STYLE, EtaLabel } from "@/components/ProjectTile";
+import ChasePicsTag from "@/components/ChasePicsTag";
+import { chaseLevel, statusOf } from "@/lib/projectStatus";
 import TrackerTable from "@/components/TrackerTable";
 import Documents from "@/components/Documents";
 import SheetSync from "@/components/SheetSync";
 import GoogleConnect from "@/components/GoogleConnect";
 import NotesUpdate from "@/components/NotesUpdate";
+import { useDismissed } from "@/lib/useDismissed";
 
 export default function ProjectDetail({
   initialProject,
@@ -42,6 +45,23 @@ export default function ProjectDetail({
   const [syncError, setSyncError] = useState<string | null>(null);
   const [confirmingRestore, setConfirmingRestore] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [tipDismissed, dismissTip] = useDismissed("pm-dashboard:smart-notes-tip-dismissed");
+  const notesRef = useRef<HTMLElement>(null);
+
+  function openSmartNotes() {
+    setShowNotesUpdate(true);
+    dismissTip();
+    requestAnimationFrame(() =>
+      notesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    );
+  }
+
+  // Arriving from the home page's Smart Notes promo (?smart_notes=1) opens
+  // the panel straight away.
+  useEffect(() => {
+    if (!readOnly && searchParams.get("smart_notes") === "1") openSmartNotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // initialProject can be served from Next.js's client router cache, so
@@ -294,21 +314,45 @@ export default function ProjectDetail({
         project.tracker_eta_cell)
   );
 
+  const percent = resolvePercent({ done, total: trackerItems.length }, project.tracker_percent_cached);
+  const status = statusOf(project, percent);
+  const style = STATUS_STYLE[status];
+  const chase = chaseLevel(project, status);
+  const headerNumber: Record<typeof status, string> = {
+    overdue: "text-red-400",
+    in_progress: "text-white",
+    not_started: "text-white",
+    done: "text-emerald-400",
+    archived: "text-navy-200",
+  };
+  const card = "rounded-2xl bg-white p-5 ring-1 ring-slate-200";
+  const sectionTitle = "text-sm font-bold uppercase tracking-wider text-navy-800";
+  const darkDate =
+    "rounded-md border border-navy-700 bg-navy-900 px-2 py-1 text-sm font-semibold text-white [color-scheme:dark] focus:border-shopee focus:outline-none";
+
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
-      <Link href="/" className="mb-4 inline-block text-sm text-slate-500 hover:text-slate-700">
-        ← All projects
-      </Link>
+    <div className="min-h-screen">
+      <header className="border-b-4 border-shopee bg-navy-950 text-navy-50">
+        <div className="mx-auto max-w-6xl px-4 pb-5 pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <Link href="/" className="text-sm font-black tracking-tight">
+              PM<span className="text-shopee">/</span>Dashboard
+            </Link>
+            <Link href="/" className="text-sm font-semibold text-navy-200 hover:text-white">
+              ← All projects
+            </Link>
+          </div>
 
-      {googleError && (
-        <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{googleError}</p>
-      )}
+          <div className="mt-5 flex flex-wrap items-center gap-1.5">
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${style.pill}`}>
+              {style.label}
+            </span>
+            <ChasePicsTag level={chase} />
+          </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
             {readOnly ? (
-              <h1 className="text-lg font-semibold">{project.name}</h1>
+              <h1 className="text-2xl font-black tracking-tight sm:text-3xl">{project.name}</h1>
             ) : (
               <input
                 key={project.name}
@@ -323,144 +367,197 @@ export default function ProjectDetail({
                   handleNameSave(value);
                 }}
                 onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-                className="rounded-md border border-transparent bg-transparent px-1 -mx-1 text-lg font-semibold hover:border-slate-200 focus:border-slate-300 focus:outline-none"
+                title="Click to rename"
+                className="-mx-1.5 min-w-0 max-w-full rounded-md border border-transparent bg-transparent px-1.5 text-2xl font-black tracking-tight text-white hover:border-navy-700 focus:border-shopee focus:outline-none sm:text-3xl"
               />
             )}
-            <CompletionBadge
-              done={done}
-              total={trackerItems.length}
-              sheetPercent={project.tracker_percent_cached}
-            />
-            {!readOnly && canSync && (
-              <button
-                type="button"
-                onClick={handleSyncNow}
-                disabled={syncing}
-                title="Re-fetch the % from the linked Google Sheet"
-                className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 disabled:opacity-40"
-              >
-                {syncing ? "Syncing..." : "⟳ Sync now"}
-              </button>
+
+            {!readOnly && (
+              <div className="flex items-center gap-2 text-sm">
+                {canSync && (
+                  <button
+                    type="button"
+                    onClick={handleSyncNow}
+                    disabled={syncing}
+                    title="Re-fetch the % from the linked Google Sheet"
+                    className="rounded-lg bg-shopee px-3 py-1.5 font-bold text-white shadow-lg shadow-shopee/30 hover:bg-shopee-400 disabled:opacity-50"
+                  >
+                    {syncing ? "Syncing..." : "⟳ Sync now"}
+                  </button>
+                )}
+                {confirmingDelete ? (
+                  <div className="flex items-center gap-2 rounded-lg bg-red-950/60 px-3 py-1.5 ring-1 ring-red-800">
+                    <span className="text-red-200">Delete this project?</span>
+                    <button
+                      type="button"
+                      onClick={handleDeleteProject}
+                      className="font-bold text-red-300 hover:underline"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDelete(false)}
+                      className="text-navy-200 hover:underline"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(true)}
+                    className="rounded-lg border border-navy-700 px-3 py-1.5 text-navy-200 hover:border-red-700 hover:text-red-300"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
-          {!readOnly &&
-            (confirmingDelete ? (
-              <div className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-1.5 text-sm">
-                <span className="text-red-700">Delete this project?</span>
-                <button
-                  type="button"
-                  onClick={handleDeleteProject}
-                  className="font-medium text-red-700 hover:underline"
-                >
-                  Yes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDelete(false)}
-                  className="text-slate-500 hover:underline"
-                >
-                  No
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setConfirmingDelete(true)}
-                className="text-sm text-slate-400 hover:text-red-600"
-              >
-                Delete project
-              </button>
-            ))}
+          <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-navy-800 pt-4 sm:grid-cols-4">
+            <div>
+              <dt className="text-xs font-semibold uppercase tracking-wider text-navy-300">Complete</dt>
+              <dd className={`mt-0.5 text-2xl font-black tabular-nums ${headerNumber[status]}`}>
+                {percent === null ? "—" : `${percent}%`}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-semibold uppercase tracking-wider text-navy-300">Tasks done</dt>
+              <dd className="mt-0.5 text-2xl font-black tabular-nums text-white">
+                {trackerItems.length === 0 ? "—" : `${done}/${trackerItems.length}`}
+              </dd>
+            </div>
+            <div>
+              <dt className="mb-1 text-xs font-semibold uppercase tracking-wider text-navy-300">Start date</dt>
+              <dd>
+                {readOnly ? (
+                  <span className="text-lg font-bold text-white">{project.start_date ?? "—"}</span>
+                ) : (
+                  <input
+                    key={project.start_date ?? "empty"}
+                    type="date"
+                    defaultValue={project.start_date ?? ""}
+                    onBlur={(e) =>
+                      e.target.value !== (project.start_date ?? "") &&
+                      handleFieldChange({ start_date: e.target.value || null })
+                    }
+                    className={darkDate}
+                  />
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-navy-300">
+                ETA
+                {status !== "done" && status !== "archived" && project.eta && (
+                  <span className="normal-case tracking-normal" suppressHydrationWarning>
+                    <EtaLabel eta={project.eta} status={status} onDark />
+                  </span>
+                )}
+              </dt>
+              <dd>
+                {readOnly ? (
+                  <span className="text-lg font-bold text-white">{project.eta ?? "—"}</span>
+                ) : (
+                  <input
+                    key={project.eta ?? "empty"}
+                    type="date"
+                    defaultValue={project.eta ?? ""}
+                    onBlur={(e) =>
+                      e.target.value !== (project.eta ?? "") &&
+                      handleFieldChange({ eta: e.target.value || null })
+                    }
+                    className={darkDate}
+                  />
+                )}
+              </dd>
+            </div>
+          </dl>
+
+          <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-navy-800">
+            <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${percent ?? 0}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-navy-300">
+            {project.tracker_percent_cached !== null
+              ? `${percent}% synced from your linked Google Sheet — this takes priority over tracker-task completion while it's set.`
+              : trackerItems.length > 0
+                ? `${percent}% based on ${done}/${trackerItems.length} tracker tasks done — no Google Sheet % synced yet.`
+                : "No progress data yet — add tracker tasks or link a Google Sheet."}
+          </p>
         </div>
+      </header>
 
-        {(() => {
-          const percent = resolvePercent({ done, total: trackerItems.length }, project.tracker_percent_cached);
-          if (project.tracker_percent_cached !== null) {
-            return (
-              <p className="mt-2 text-xs text-slate-400">
-                Showing {percent}% synced from your linked Google Sheet — this takes priority
-                over tracker-task completion while it's set.
-              </p>
-            );
-          }
-          if (trackerItems.length > 0) {
-            return (
-              <p className="mt-2 text-xs text-slate-400">
-                Showing {percent}% based on {done}/{trackerItems.length} tracker tasks done — no
-                Google Sheet % synced yet.
-              </p>
-            );
-          }
-          return null;
-        })()}
-
-        {syncError && (
-          <p className="mt-2 text-sm text-red-600">{syncError}</p>
+      <main className="mx-auto max-w-6xl px-4 py-5">
+        {googleError && (
+          <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{googleError}</p>
         )}
+        {syncError && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{syncError}</p>}
 
-        <div className="mt-4 flex flex-wrap gap-6">
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            Start date
-            {readOnly ? (
-              <span className="text-slate-500">{project.start_date ?? "—"}</span>
-            ) : (
-              <input
-                key={project.start_date ?? "empty"}
-                type="date"
-                defaultValue={project.start_date ?? ""}
-                onBlur={(e) =>
-                  e.target.value !== (project.start_date ?? "") &&
-                  handleFieldChange({ start_date: e.target.value || null })
-                }
-                className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-              />
-            )}
-          </label>
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            ETA
-            {readOnly ? (
-              <span className="text-slate-500">{project.eta ?? "—"}</span>
-            ) : (
-              <input
-                key={project.eta ?? "empty"}
-                type="date"
-                defaultValue={project.eta ?? ""}
-                onBlur={(e) =>
-                  e.target.value !== (project.eta ?? "") &&
-                  handleFieldChange({ eta: e.target.value || null })
-                }
-                className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-              />
-            )}
-          </label>
-        </div>
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="space-y-5">
+            <section ref={notesRef} className={`${card} scroll-mt-4`}>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className={sectionTitle}>README / Instructions</h3>
+                {!readOnly &&
+                  (showNotesUpdate ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowNotesUpdate(false)}
+                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                    >
+                      Close Smart Notes
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={openSmartNotes}
+                      className="relative rounded-lg bg-shopee px-3 py-1.5 text-sm font-bold text-white shadow-md shadow-shopee/30 hover:bg-shopee-600"
+                    >
+                      ✨ Smart Notes
+                      {!tipDismissed && (
+                        <span className="absolute -right-2 -top-2 rounded-full bg-navy-900 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white ring-2 ring-white">
+                          New
+                        </span>
+                      )}
+                    </button>
+                  ))}
+              </div>
 
-        <div className="mt-8 space-y-8">
-          <section>
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-slate-700">README / Instructions</h3>
-              {!readOnly && (
-                <button
-                  type="button"
-                  onClick={() => setShowNotesUpdate((v) => !v)}
-                  className="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white"
-                >
-                  {showNotesUpdate ? "Cancel update" : "Update notes"}
-                </button>
+              {!readOnly && !showNotesUpdate && !tipDismissed && (
+                <div className="mb-3 flex items-start gap-3 rounded-xl bg-navy-50 p-3 text-sm ring-1 ring-navy-200">
+                  <span className="text-lg leading-none" aria-hidden>
+                    ✨
+                  </span>
+                  <div className="flex-1">
+                    <p className="font-bold text-navy-900">Let your notes do the admin.</p>
+                    <p className="mt-0.5 text-navy-700">
+                      Paste what was said in your last sync — Smart Notes spots finished tasks, new
+                      action items, owners and deadlines, and refreshes this README. Nothing changes
+                      until you approve it.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={openSmartNotes}
+                      className="mt-2 font-bold text-shopee hover:text-shopee-700"
+                    >
+                      Try Smart Notes →
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={dismissTip}
+                    title="Dismiss"
+                    className="rounded-md px-1 text-navy-400 hover:bg-navy-200/50 hover:text-navy-900"
+                  >
+                    ✕
+                  </button>
+                </div>
               )}
-            </div>
-
-            <div className="prose prose-sm max-w-none rounded-md border border-slate-200 bg-white p-4">
-              {project.readme.trim() ? (
-                <ReactMarkdown>{project.readme}</ReactMarkdown>
-              ) : (
-                <p className="text-slate-400">Nothing here yet.</p>
-              )}
-            </div>
 
             {!readOnly && showNotesUpdate && (
-              <div className="mt-4">
+              <div className="mb-4 rounded-xl bg-shopee-50/60 p-4 ring-1 ring-shopee-200">
                 <NotesUpdate
                   projectId={project.id}
                   trackerItems={trackerItems}
@@ -474,6 +571,15 @@ export default function ProjectDetail({
                 />
               </div>
             )}
+
+              <div className="prose prose-sm max-w-none rounded-xl border-l-4 border-navy-600 bg-navy-50/50 p-4 prose-headings:text-navy-900 prose-strong:text-navy-900 prose-a:text-navy-600">
+                {project.readme.trim() ? (
+                  <ReactMarkdown>{project.readme}</ReactMarkdown>
+                ) : (
+                  <p className="text-slate-400">Nothing here yet.</p>
+                )}
+              </div>
+
 
             {!readOnly && project.backup_created_at && (
               <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
@@ -517,43 +623,46 @@ export default function ProjectDetail({
                 )}
               </div>
             )}
-          </section>
+            </section>
 
-          <section>
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-slate-700">Google Sheet tracker</h3>
-              {!readOnly && (
-                <GoogleConnect
-                  connected={googleConnected}
-                  connectedEmail={googleEmail}
-                  returnTo={`/projects/${project.id}`}
-                />
-              )}
-            </div>
-            <SheetSync project={project} onFieldChange={handleFieldChange} readOnly={readOnly} />
-          </section>
+            <section className={card}>
+              <TrackerTable
+                items={trackerItems}
+                onAdd={handleAddTrackerItem}
+                onUpdate={handleUpdateTrackerItem}
+                onDelete={handleDeleteTrackerItem}
+                readOnly={readOnly}
+              />
+            </section>
+          </div>
 
-          <section>
-            <TrackerTable
-              items={trackerItems}
-              onAdd={handleAddTrackerItem}
-              onUpdate={handleUpdateTrackerItem}
-              onDelete={handleDeleteTrackerItem}
-              readOnly={readOnly}
-            />
-          </section>
+          <div className="space-y-5">
+            <section className={card}>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className={sectionTitle}>Google Sheet</h3>
+                {!readOnly && (
+                  <GoogleConnect
+                    connected={googleConnected}
+                    connectedEmail={googleEmail}
+                    returnTo={`/projects/${project.id}`}
+                  />
+                )}
+              </div>
+              <SheetSync project={project} onFieldChange={handleFieldChange} readOnly={readOnly} />
+            </section>
 
-          <section>
-            <Documents
-              documents={documents}
-              onAdd={handleAddDocument}
-              onUpdate={handleUpdateDocument}
-              onDelete={handleDeleteDocument}
-              readOnly={readOnly}
-            />
-          </section>
+            <section className={card}>
+              <Documents
+                documents={documents}
+                onAdd={handleAddDocument}
+                onUpdate={handleUpdateDocument}
+                onDelete={handleDeleteDocument}
+                readOnly={readOnly}
+              />
+            </section>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

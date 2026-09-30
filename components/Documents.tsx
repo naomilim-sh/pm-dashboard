@@ -108,7 +108,7 @@ export default function Documents({
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-slate-700">Documents</h3>
+        <h3 className="text-sm font-bold uppercase tracking-wider text-navy-800">Documents</h3>
         <span className="text-xs text-slate-500">
           {links.length === 0 ? "No documents yet" : `${links.length} document(s)`}
         </span>
@@ -192,7 +192,7 @@ export default function Documents({
           <button
             type="submit"
             disabled={adding || !newValue.trim()}
-            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+            className="rounded-lg bg-shopee px-3 py-1.5 text-sm font-bold text-white hover:bg-shopee-600 disabled:opacity-40"
           >
             {adding ? "Adding..." : "+ Add"}
           </button>
