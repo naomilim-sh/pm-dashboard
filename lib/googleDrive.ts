@@ -26,8 +26,11 @@ export async function fetchDriveFileMeta(
     throw new Error("Couldn't find a Google file ID in that link.");
   }
 
+  // supportsAllDrives is required or Drive API returns a bare 404 for files
+  // that live in a Shared/Team Drive rather than the user's own My Drive,
+  // even when they have full access to it.
   const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType`,
+    `https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType&supportsAllDrives=true`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   if (!res.ok) {
