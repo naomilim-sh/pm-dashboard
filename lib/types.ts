@@ -18,6 +18,12 @@ export type Project = {
   tracker_denominator_label: string | null;
   tracker_start_date_cell: string | null;
   tracker_eta_cell: string | null;
+  // A single-slot snapshot of readme + tracker_items taken right before the
+  // most recent "Update from notes" apply — lets that one apply be undone,
+  // not a full version history.
+  readme_backup: string | null;
+  tracker_backup: TrackerItem[] | null;
+  backup_created_at: string | null;
   created_at: string;
   updated_at: string;
 };

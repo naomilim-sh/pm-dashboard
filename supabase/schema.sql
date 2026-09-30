@@ -21,6 +21,9 @@ create table if not exists public.projects (
   tracker_denominator_label text,
   tracker_start_date_cell text,
   tracker_eta_cell text,
+  readme_backup text,
+  tracker_backup jsonb,
+  backup_created_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -41,6 +44,9 @@ alter table public.projects add column if not exists tracker_numerator_labels te
 alter table public.projects add column if not exists tracker_denominator_label text;
 alter table public.projects add column if not exists tracker_start_date_cell text;
 alter table public.projects add column if not exists tracker_eta_cell text;
+alter table public.projects add column if not exists readme_backup text;
+alter table public.projects add column if not exists tracker_backup jsonb;
+alter table public.projects add column if not exists backup_created_at timestamptz;
 alter table public.projects drop column if exists status;
 
 create table if not exists public.tracker_items (

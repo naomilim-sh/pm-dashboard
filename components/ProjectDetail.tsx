@@ -40,6 +40,8 @@ export default function ProjectDetail({
   const [showNotesUpdate, setShowNotesUpdate] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [confirmingRestore, setConfirmingRestore] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   useEffect(() => {
     // initialProject can be served from Next.js's client router cache, so
@@ -174,6 +176,58 @@ export default function ProjectDetail({
     if (!error) {
       setProject((prev) => ({ ...prev, last_notes_raw: rawNotes }));
     }
+  }
+
+  async function handleBackupBeforeApply() {
+    const patch = {
+      readme_backup: project.readme,
+      tracker_backup: trackerItems,
+      backup_created_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("projects").update(patch).eq("id", project.id);
+    if (!error) {
+      setProject((prev) => ({ ...prev, ...patch }));
+    }
+  }
+
+  async function handleRestoreBackup() {
+    if (!project.backup_created_at) return;
+    setRestoring(true);
+
+    const readme = project.readme_backup ?? "";
+    const backupItems = project.tracker_backup ?? [];
+
+    const { error: readmeError } = await supabase
+      .from("projects")
+      .update({ readme })
+      .eq("id", project.id);
+    if (!readmeError) {
+      setProject((prev) => ({ ...prev, readme }));
+    }
+
+    await supabase.from("tracker_items").delete().eq("project_id", project.id);
+    if (backupItems.length > 0) {
+      const { data } = await supabase
+        .from("tracker_items")
+        .insert(
+          backupItems.map((t) => ({
+            id: t.id,
+            project_id: project.id,
+            task: t.task,
+            owner: t.owner,
+            status: t.status,
+            deadline: t.deadline,
+            created_at: t.created_at,
+          }))
+        )
+        .select();
+      setTrackerItems(data ?? []);
+    } else {
+      setTrackerItems([]);
+    }
+
+    setRestoring(false);
+    setConfirmingRestore(false);
   }
 
   async function handleAddDocument(input: Partial<Document>) {
@@ -388,8 +442,52 @@ export default function ProjectDetail({
                   onDeleteTrackerItem={handleDeleteTrackerItem}
                   onAddTrackerItem={handleAddTrackerItemWithStatus}
                   onSaveNotesSnapshot={handleSaveNotesSnapshot}
+                  onBackupBeforeApply={handleBackupBeforeApply}
                   onApplied={() => setShowNotesUpdate(false)}
                 />
+              </div>
+            )}
+
+            {!readOnly && project.backup_created_at && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
+                <span>
+                  Backup from{" "}
+                  {new Date(project.backup_created_at).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}{" "}
+                  (before the last notes update)
+                </span>
+                {confirmingRestore ? (
+                  <>
+                    <span className="text-red-600">Restore it? This replaces the current README and tracker.</span>
+                    <button
+                      type="button"
+                      onClick={handleRestoreBackup}
+                      disabled={restoring}
+                      className="font-medium text-red-600 hover:underline disabled:opacity-40"
+                    >
+                      {restoring ? "Restoring..." : "Yes"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingRestore(false)}
+                      className="hover:underline"
+                    >
+                      No
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingRestore(true)}
+                    className="underline hover:text-slate-600"
+                  >
+                    Restore previous version
+                  </button>
+                )}
               </div>
             )}
           </section>

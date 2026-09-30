@@ -11,6 +11,7 @@ export default function NotesUpdate({
   onDeleteTrackerItem,
   onAddTrackerItem,
   onSaveNotesSnapshot,
+  onBackupBeforeApply,
   onApplied,
 }: {
   projectId: string;
@@ -25,6 +26,7 @@ export default function NotesUpdate({
     deadline: string | null;
   }) => Promise<void>;
   onSaveNotesSnapshot: (rawNotes: string) => Promise<void>;
+  onBackupBeforeApply: () => Promise<void>;
   onApplied?: () => void;
 }) {
   const [notes, setNotes] = useState("");
@@ -35,6 +37,7 @@ export default function NotesUpdate({
   const [selectedReadme, setSelectedReadme] = useState(true);
   const [selectedUpdates, setSelectedUpdates] = useState<Set<number>>(new Set());
   const [selectedNewTasks, setSelectedNewTasks] = useState<Set<number>>(new Set());
+  const [editedReadme, setEditedReadme] = useState("");
 
   async function handleAnalyze() {
     if (!notes.trim()) return;
@@ -54,6 +57,7 @@ export default function NotesUpdate({
         const p: NotesUpdateProposal = body.proposal;
         setProposal(p);
         setSelectedReadme(Boolean(p.readme_summary));
+        setEditedReadme(p.readme_summary ?? "");
         setSelectedUpdates(new Set(p.tracker_updates.map((_, i) => i)));
         setSelectedNewTasks(new Set(p.new_tasks.map((_, i) => i)));
       }
@@ -68,8 +72,12 @@ export default function NotesUpdate({
     if (!proposal) return;
     setApplying(true);
 
-    if (selectedReadme && proposal.readme_summary) {
-      await onReadmeSave(proposal.readme_summary);
+    // Snapshot current state before touching anything, so this one apply
+    // can be undone if it turns out wrong (e.g. drops something it shouldn't).
+    await onBackupBeforeApply();
+
+    if (selectedReadme && editedReadme.trim()) {
+      await onReadmeSave(editedReadme);
     }
 
     for (const i of selectedUpdates) {
@@ -143,20 +151,22 @@ export default function NotesUpdate({
       {proposal && (
         <div className="mt-4 space-y-4 rounded-md border border-slate-200 bg-slate-50 p-4">
           {proposal.readme_summary && (
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={selectedReadme}
-                onChange={() => setSelectedReadme((v) => !v)}
-                className="mt-1"
+            <div className="text-sm">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedReadme}
+                  onChange={() => setSelectedReadme((v) => !v)}
+                />
+                <span className="font-medium">Replace README with updated summary — edit below if needed:</span>
+              </label>
+              <textarea
+                value={editedReadme}
+                onChange={(e) => setEditedReadme(e.target.value)}
+                rows={12}
+                className="mt-1 max-h-64 w-full overflow-y-auto rounded border border-slate-200 bg-white p-2 font-sans text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
               />
-              <span>
-                <span className="font-medium">Replace README with updated summary:</span>
-                <pre className="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-slate-200 bg-white p-2 font-sans text-slate-600">
-                  {proposal.readme_summary}
-                </pre>
-              </span>
-            </label>
+            </div>
           )}
 
           {proposal.tracker_updates.map((u, i) => (
