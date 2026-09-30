@@ -129,13 +129,14 @@ The "Manager access" panel on your home page lets you invite someone (e.g.
 your manager) to view your *entire* dashboard, read-only — useful for a
 recurring catch-up. Enter their email and click Invite:
 
-- It emails them a one-click magic sign-in link (no password to set).
-- Once they sign in with that email (via the link, or by signing up/logging
-  in manually with it later), they see a "Viewing: [your email]" switcher
-  appear on their own home page and can flip to your dashboard any time.
-- Access is permanent until you click "Revoke" — there's no expiry on the
-  grant itself (only the emailed link expires, per Supabase's normal
-  magic-link expiry).
+- No email is sent — tell them directly to sign up at this site using that
+  exact email address (an earlier magic-link version was removed: it created
+  password-less accounts that then couldn't sign up or sign in, and the
+  unexpected email looked like phishing).
+- Once they sign up or log in with that email, they see a "Viewing: [your
+  email]" switcher on their own home page and can flip to your dashboard any
+  time.
+- Access is permanent until you click "Revoke" — there's no expiry on it.
 - They see everything read-only: no edit, delete, sync, or add controls
   anywhere, on the dashboard or any project page.
 

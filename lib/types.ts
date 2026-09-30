@@ -24,6 +24,7 @@ export type Project = {
   readme_backup: string | null;
   tracker_backup: TrackerItem[] | null;
   backup_created_at: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 };

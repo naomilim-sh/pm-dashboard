@@ -101,6 +101,14 @@ export default function HomeDashboard({
     return null;
   }
 
+  async function handleArchiveToggle(projectId: string, archive: boolean) {
+    const archived_at = archive ? new Date().toISOString() : null;
+    const { error } = await supabase.from("projects").update({ archived_at }).eq("id", projectId);
+    if (!error) {
+      setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, archived_at } : p)));
+    }
+  }
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.push("/login");
@@ -138,9 +146,16 @@ export default function HomeDashboard({
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {projects.map((p) => (
-          <ProjectCard key={p.id} project={p} progress={progress[p.id] ?? { done: 0, total: 0 }} />
-        ))}
+        {[...projects]
+          .sort((a, b) => Number(Boolean(a.archived_at)) - Number(Boolean(b.archived_at)))
+          .map((p) => (
+            <ProjectCard
+              key={p.id}
+              project={p}
+              progress={progress[p.id] ?? { done: 0, total: 0 }}
+              onArchiveToggle={readOnly ? undefined : handleArchiveToggle}
+            />
+          ))}
 
         {!readOnly &&
           (creating ? (

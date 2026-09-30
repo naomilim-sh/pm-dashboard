@@ -15,41 +15,70 @@ function formatDate(d: string | null) {
 export default function ProjectCard({
   project,
   progress,
+  onArchiveToggle,
 }: {
   project: Project;
   progress: ProjectProgress;
+  onArchiveToggle?: (projectId: string, archive: boolean) => void;
 }) {
   const percent = resolvePercent(progress, project.tracker_percent_cached);
   const preview = extractReadmePreview(project.readme);
+  const isArchived = Boolean(project.archived_at);
 
   return (
     <Link
       href={`/projects/${project.id}`}
-      className="flex min-h-[160px] flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+      className={`flex min-h-[160px] flex-col justify-between rounded-2xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+        isArchived
+          ? "border-slate-200 bg-slate-50 opacity-60 grayscale hover:opacity-90"
+          : "border-slate-200 bg-white hover:border-slate-300"
+      }`}
     >
       <div>
         <div className="mb-2 flex items-start justify-between gap-2">
           <h3 className="line-clamp-2 font-semibold text-slate-900">{project.name}</h3>
-          {project.tracker_sheet_url && (
-            <button
-              type="button"
-              title="Open tracker sheet"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                window.open(project.tracker_sheet_url!, "_blank", "noopener,noreferrer");
-              }}
-              className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-            >
-              🔗
-            </button>
-          )}
+          <div className="flex shrink-0 items-center gap-1">
+            {project.tracker_sheet_url && (
+              <button
+                type="button"
+                title="Open tracker sheet"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.open(project.tracker_sheet_url!, "_blank", "noopener,noreferrer");
+                }}
+                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                🔗
+              </button>
+            )}
+            {onArchiveToggle && (isArchived || percent === 100) && (
+              <button
+                type="button"
+                title={isArchived ? "Unarchive project" : "Archive project"}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onArchiveToggle(project.id, !isArchived);
+                }}
+                className="rounded-md px-1.5 py-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                {isArchived ? "Unarchive" : "Archive"}
+              </button>
+            )}
+          </div>
         </div>
-        <CompletionBadge
-          done={progress.done}
-          total={progress.total}
-          sheetPercent={project.tracker_percent_cached}
-        />
+        {isArchived ? (
+          <span className="inline-block rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-500">
+            Archived
+          </span>
+        ) : (
+          <CompletionBadge
+            done={progress.done}
+            total={progress.total}
+            sheetPercent={project.tracker_percent_cached}
+          />
+        )}
         {preview && (
           <p className="mt-2 line-clamp-2 text-xs text-slate-500">
             <span className="font-medium text-slate-400">Latest update: </span>
