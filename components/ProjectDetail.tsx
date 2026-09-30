@@ -116,6 +116,15 @@ export default function ProjectDetail({
     }
   }
 
+  async function handleNameSave(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === project.name) return;
+    const { error } = await supabase.from("projects").update({ name: trimmed }).eq("id", project.id);
+    if (!error) {
+      setProject((prev) => ({ ...prev, name: trimmed }));
+    }
+  }
+
   async function handleReadmeSave(readme: string) {
     const { error } = await supabase.from("projects").update({ readme }).eq("id", project.id);
     if (!error) {
@@ -298,7 +307,25 @@ export default function ProjectDetail({
       <div className="rounded-lg border border-slate-200 bg-white p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-lg font-semibold">{project.name}</h1>
+            {readOnly ? (
+              <h1 className="text-lg font-semibold">{project.name}</h1>
+            ) : (
+              <input
+                key={project.name}
+                defaultValue={project.name}
+                size={Math.max(project.name.length, 8)}
+                onBlur={(e) => {
+                  const value = e.target.value.trim();
+                  if (!value) {
+                    e.target.value = project.name;
+                    return;
+                  }
+                  handleNameSave(value);
+                }}
+                onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                className="rounded-md border border-transparent bg-transparent px-1 -mx-1 text-lg font-semibold hover:border-slate-200 focus:border-slate-300 focus:outline-none"
+              />
+            )}
             <CompletionBadge
               done={done}
               total={trackerItems.length}
