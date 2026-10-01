@@ -46,7 +46,7 @@ export default function HomeDashboard({
   const [progress, setProgress] = useState<Record<string, ProjectProgress>>(progressByProject);
   const [creating, setCreating] = useState(false);
   const [layout, setLayout] = useState<Layout>("tiles");
-  const [statusFilter, setStatusFilter] = useState<ProjectStatus | "all">("all");
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     try {
@@ -148,21 +148,11 @@ export default function HomeDashboard({
   const overdue = rows.filter((r) => r.status === "overdue").length;
 
   const STATUS_ORDER: ProjectStatus[] = ["overdue", "in_progress", "not_started", "done", "archived"];
-  const filters: { key: ProjectStatus | "all"; label: string; dot: string; active: string }[] = [
-    { key: "all", label: "All", dot: "bg-navy-900", active: "bg-navy-900 text-white ring-navy-900" },
-    { key: "overdue", label: "Overdue", dot: "bg-red-700", active: "bg-red-700 text-white ring-red-700" },
-    { key: "in_progress", label: "In progress", dot: "bg-navy-600", active: "bg-navy-600 text-white ring-navy-600" },
-    { key: "not_started", label: "Not started", dot: "bg-slate-400", active: "bg-slate-600 text-white ring-slate-600" },
-    { key: "done", label: "Done", dot: "bg-emerald-500", active: "bg-emerald-600 text-white ring-emerald-600" },
-    { key: "archived", label: "Archived", dot: "bg-slate-300", active: "bg-slate-500 text-white ring-slate-500" },
-  ];
-  const countFor = (key: ProjectStatus | "all") =>
-    key === "all" ? rows.filter((r) => r.status !== "archived").length : rows.filter((r) => r.status === key).length;
   const archivedRows = rows.filter((r) => r.status === "archived");
-  // One cluster: everything (minus archived, unless that filter is picked)
-  // sorted by urgency — status first, then soonest ETA.
+  // One cluster sorted by urgency — status first, then soonest ETA. Archived
+  // projects stay out of the way unless asked for.
   const tileRows = rows
-    .filter((r) => (statusFilter === "all" ? r.status !== "archived" : r.status === statusFilter))
+    .filter((r) => showArchived || r.status !== "archived")
     .sort(
       (a, b) =>
         STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) ||
@@ -256,31 +246,20 @@ export default function HomeDashboard({
 
         {projects.length > 0 && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            {layout === "tiles" ? (
-              <div className="flex flex-wrap gap-2">
-                {filters.map((f) => {
-                  const count = countFor(f.key);
-                  const selected = statusFilter === f.key;
-                  if (count === 0 && !selected && f.key !== "all") return null;
-                  return (
-                    <button
-                      key={f.key}
-                      type="button"
-                      onClick={() => setStatusFilter(selected && f.key !== "all" ? "all" : f.key)}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold ring-1 transition ${
-                        selected ? f.active : "bg-white text-navy-800 ring-slate-200 hover:ring-navy-400"
-                      }`}
-                    >
-                      {!selected && <span className={`h-2 w-2 rounded-full ${f.dot}`} />}
-                      {f.label}
-                      <span className={selected ? "opacity-80" : "text-slate-400"}>{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-sm font-bold uppercase tracking-wider text-navy-800">By deadline</p>
-            )}
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-bold uppercase tracking-wider text-navy-800">
+                {layout === "tiles" ? "Most urgent first" : "By deadline"}
+              </p>
+              {layout === "tiles" && archivedRows.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowArchived((v) => !v)}
+                  className="text-xs font-semibold text-slate-500 underline-offset-2 hover:text-navy-900 hover:underline"
+                >
+                  {showArchived ? "Hide archived" : `Show archived (${archivedRows.length})`}
+                </button>
+              )}
+            </div>
             <div className="inline-flex rounded-lg bg-navy-50 p-1 text-sm font-bold" role="tablist">
               {(["tiles", "timeline"] as const).map((l) => (
                 <button
@@ -306,7 +285,7 @@ export default function HomeDashboard({
             archivedCount={archivedRows.length}
           />
         ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {tileRows.map((r) => (
             <ProjectTile
               key={r.project.id}
