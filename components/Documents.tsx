@@ -121,7 +121,7 @@ export default function Documents({
             return (
               <div
                 key={d.id}
-                className="group flex items-center gap-1 rounded-md border border-slate-200 bg-white p-1"
+                className="group flex min-w-0 max-w-full items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 hover:border-navy-200"
               >
                 {isRenaming ? (
                   <form
@@ -149,9 +149,14 @@ export default function Documents({
                     target="_blank"
                     rel="noopener noreferrer"
                     title={displayTitle(d)}
-                    className="flex h-8 w-8 items-center justify-center rounded hover:bg-slate-50"
+                    className="flex h-8 min-w-0 items-center gap-1.5 rounded px-1.5 hover:bg-slate-50"
                   >
-                    <LinkIcon kind={d.link_kind} />
+                    <span className="shrink-0">
+                      <LinkIcon kind={d.link_kind} />
+                    </span>
+                    <span className="max-w-[13rem] truncate text-sm font-medium text-navy-900">
+                      {displayTitle(d)}
+                    </span>
                   </a>
                 )}
 

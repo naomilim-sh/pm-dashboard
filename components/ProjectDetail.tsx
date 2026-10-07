@@ -16,6 +16,22 @@ import GoogleConnect from "@/components/GoogleConnect";
 import NotesUpdate from "@/components/NotesUpdate";
 import { useDismissed } from "@/lib/useDismissed";
 
+// True when the project has a sheet plus at least one thing to pull from it
+// (a % source or a start/ETA cell) — i.e. when /api/sync-progress can work.
+function hasSyncConfig(p: Project) {
+  return Boolean(
+    p.tracker_sheet_url &&
+      (p.tracker_percent_cell ||
+        (p.tracker_percent_numerator_cell && p.tracker_percent_denominator_cell) ||
+        (p.tracker_label_column &&
+          p.tracker_value_column &&
+          p.tracker_numerator_labels &&
+          p.tracker_denominator_label) ||
+        p.tracker_start_date_cell ||
+        p.tracker_eta_cell)
+  );
+}
+
 export default function ProjectDetail({
   initialProject,
   initialTrackerItems,
@@ -74,7 +90,17 @@ export default function ProjectDetail({
         .select("*")
         .eq("id", initialProject.id)
         .single();
-      if (!cancelled && data) setProject(data);
+      if (cancelled) return;
+      if (data) setProject(data);
+
+      // Then pull fresh numbers from the linked sheet so nobody has to press
+      // "Sync now" — done after the row fetch so a slower stale read can't
+      // land on top of the synced values. Viewers can't sync (it uses the
+      // owner's Google connection), so only owners do this.
+      const live = data ?? initialProject;
+      if (!readOnly && googleConnected && hasSyncConfig(live)) {
+        await handleSyncNow(true);
+      }
     })();
     return () => {
       cancelled = true;
@@ -107,9 +133,10 @@ export default function ProjectDetail({
     }
   }
 
-  async function handleSyncNow() {
+  async function handleSyncNow(auto = false) {
     setSyncing(true);
     setSyncError(null);
+    const prefix = auto ? "Couldn't refresh from the Google Sheet automatically: " : "";
     try {
       const res = await fetch("/api/sync-progress", {
         method: "POST",
@@ -118,7 +145,7 @@ export default function ProjectDetail({
       });
       const body = await res.json();
       if (!res.ok) {
-        setSyncError(body.error ?? "Sync failed.");
+        setSyncError(prefix + (body.error ?? "Sync failed."));
       } else {
         setProject((prev) => ({
           ...prev,
@@ -130,7 +157,7 @@ export default function ProjectDetail({
         }));
       }
     } catch {
-      setSyncError("Sync failed — could not reach the server.");
+      setSyncError(prefix + "Sync failed — could not reach the server.");
     } finally {
       setSyncing(false);
     }
@@ -302,17 +329,7 @@ export default function ProjectDetail({
   }
 
   const done = trackerItems.filter((i) => i.status === "done").length;
-  const canSync = Boolean(
-    project.tracker_sheet_url &&
-      (project.tracker_percent_cell ||
-        (project.tracker_percent_numerator_cell && project.tracker_percent_denominator_cell) ||
-        (project.tracker_label_column &&
-          project.tracker_value_column &&
-          project.tracker_numerator_labels &&
-          project.tracker_denominator_label) ||
-        project.tracker_start_date_cell ||
-        project.tracker_eta_cell)
-  );
+  const canSync = hasSyncConfig(project);
 
   const percent = resolvePercent({ done, total: trackerItems.length }, project.tracker_percent_cached);
   const status = statusOf(project, percent);
@@ -377,12 +394,12 @@ export default function ProjectDetail({
                 {canSync && (
                   <button
                     type="button"
-                    onClick={handleSyncNow}
+                    onClick={() => handleSyncNow()}
                     disabled={syncing}
                     title="Re-fetch the % from the linked Google Sheet"
                     className="rounded-lg bg-shopee px-3 py-1.5 font-bold text-white shadow-lg shadow-shopee/30 hover:bg-shopee-400 disabled:opacity-50"
                   >
-                    {syncing ? "Syncing..." : "⟳ Sync now"}
+                    {syncing ? "Syncing from sheet..." : "⟳ Sync now"}
                   </button>
                 )}
                 {confirmingDelete ? (
