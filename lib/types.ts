@@ -25,9 +25,14 @@ export type Project = {
   tracker_backup: TrackerItem[] | null;
   backup_created_at: string | null;
   archived_at: string | null;
+  // Review mode — see supabase/schema.sql. Missing (undefined) until the
+  // column has been added to the database.
+  review_status?: ReviewStatus;
   created_at: string;
   updated_at: string;
 };
+
+export type ReviewStatus = "pending" | "reviewed" | null;
 
 export type TrackerItemStatus = "todo" | "in_progress" | "done";
 

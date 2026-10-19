@@ -3,6 +3,7 @@ import { Project, ProjectProgress, resolvePercent } from "@/lib/types";
 import { extractReadmePreview } from "@/lib/readmePreview";
 import { ProjectStatus, chaseLevel, daysUntil, formatDate, statusOf } from "@/lib/projectStatus";
 import ChasePicsTag from "@/components/ChasePicsTag";
+import ReviewBadge from "@/components/ReviewBadge";
 
 export const STATUS_STYLE: Record<
   ProjectStatus,
@@ -91,10 +92,12 @@ export default function ProjectTile({
   project,
   progress,
   onArchiveToggle,
+  onMarkReviewed,
 }: {
   project: Project;
   progress: ProjectProgress;
   onArchiveToggle?: (projectId: string, archive: boolean) => void;
+  onMarkReviewed?: (projectId: string) => void;
 }) {
   const percent = resolvePercent(progress, project.tracker_percent_cached);
   const preview = extractReadmePreview(project.readme);
@@ -113,10 +116,11 @@ export default function ProjectTile({
 
       {/* Fixed-height slots so names, tags and footers line up across a row. */}
       <div className="flex h-5 items-center gap-1.5">
-        <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${style.pill}`}>
+        <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${style.pill}`}>
           {style.label}
         </span>
         <ChasePicsTag level={chase} />
+        <ReviewBadge status={project.review_status} />
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-3">
@@ -158,7 +162,20 @@ export default function ProjectTile({
         <span suppressHydrationWarning>
           <EtaLabel eta={project.eta} status={status} />
         </span>
-        {onArchiveToggle && (isArchived || status === "done") ? (
+        {onMarkReviewed && project.review_status === "pending" ? (
+          <button
+            type="button"
+            title="Nothing new on this project — mark it reviewed without a notes update"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onMarkReviewed(project.id);
+            }}
+            className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-600 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            No updates ✓
+          </button>
+        ) : onArchiveToggle && (isArchived || status === "done") ? (
           <button
             type="button"
             title={isArchived ? "Unarchive project" : "Archive project"}

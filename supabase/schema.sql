@@ -25,6 +25,9 @@ create table if not exists public.projects (
   tracker_backup jsonb,
   backup_created_at timestamptz,
   archived_at timestamptz,
+  -- Review mode: null = not part of a review, 'pending' = still needs a
+  -- look this round, 'reviewed' = updated via Smart Notes or marked "no updates".
+  review_status text check (review_status in ('pending', 'reviewed')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -49,6 +52,8 @@ alter table public.projects add column if not exists readme_backup text;
 alter table public.projects add column if not exists tracker_backup jsonb;
 alter table public.projects add column if not exists backup_created_at timestamptz;
 alter table public.projects add column if not exists archived_at timestamptz;
+alter table public.projects add column if not exists review_status text
+  check (review_status in ('pending', 'reviewed'));
 alter table public.projects drop column if exists status;
 
 create table if not exists public.tracker_items (

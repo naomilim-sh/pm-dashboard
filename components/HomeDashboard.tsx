@@ -7,6 +7,8 @@ import { DashboardViewer, Project, ProjectProgress, resolvePercent } from "@/lib
 import ProjectTile from "@/components/ProjectTile";
 import ProjectTimeline from "@/components/ProjectTimeline";
 import { ProjectStatus, chaseLevel, statusOf } from "@/lib/projectStatus";
+import { endReview, markReviewed, startReview } from "@/lib/review";
+import ReviewCompleteDialog from "@/components/ReviewCompleteDialog";
 
 type Layout = "tiles" | "timeline";
 const LAYOUT_KEY = "pm-dashboard:home-layout";
@@ -47,6 +49,10 @@ export default function HomeDashboard({
   const [creating, setCreating] = useState(false);
   const [layout, setLayout] = useState<Layout>("tiles");
   const [showArchived, setShowArchived] = useState(false);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewPopupDismissed, setReviewPopupDismissed] = useState(false);
+  const [confirmingEndReview, setConfirmingEndReview] = useState(false);
 
   useEffect(() => {
     try {
@@ -130,6 +136,54 @@ export default function HomeDashboard({
     }
   }
 
+  async function currentUserId() {
+    return (await supabase.auth.getUser()).data.user?.id ?? null;
+  }
+
+  async function handleStartReview() {
+    // Only incomplete work gets reviewed — done and archived projects sit out.
+    const ids = new Set(toReviewIds);
+    if (ids.size === 0) return;
+    setReviewBusy(true);
+    setReviewError(null);
+    const error = await startReview(supabase, [...ids]);
+    if (error) {
+      setReviewError(error);
+    } else {
+      setProjects((prev) =>
+        prev.map((p) => (ids.has(p.id) ? { ...p, review_status: "pending" } : p))
+      );
+      setReviewPopupDismissed(false);
+    }
+    setReviewBusy(false);
+  }
+
+  async function handleEndReview() {
+    const userId = await currentUserId();
+    if (!userId) return;
+    setReviewBusy(true);
+    setReviewError(null);
+    const error = await endReview(supabase, userId);
+    if (error) {
+      setReviewError(error);
+    } else {
+      setProjects((prev) => prev.map((p) => ({ ...p, review_status: null })));
+    }
+    setConfirmingEndReview(false);
+    setReviewBusy(false);
+  }
+
+  async function handleMarkReviewed(projectId: string) {
+    const error = await markReviewed(supabase, projectId);
+    if (error) {
+      setReviewError(error);
+    } else {
+      setProjects((prev) =>
+        prev.map((p) => (p.id === projectId ? { ...p, review_status: "reviewed" } : p))
+      );
+    }
+  }
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.push("/login");
@@ -147,6 +201,15 @@ export default function HomeDashboard({
   const toChase = rows.filter((r) => chaseLevel(r.project, r.status) !== null).length;
   const overdue = rows.filter((r) => r.status === "overdue").length;
 
+  const toReviewIds = rows
+    .filter((r) => r.status !== "archived" && r.status !== "done")
+    .map((r) => r.project.id);
+  // Review mode is on while any live project carries a review status.
+  const inReview = rows.filter((r) => r.status !== "archived" && r.project.review_status);
+  const reviewMode = inReview.length > 0;
+  const reviewedCount = inReview.filter((r) => r.project.review_status === "reviewed").length;
+  const pendingCount = inReview.length - reviewedCount;
+
   const STATUS_ORDER: ProjectStatus[] = ["overdue", "in_progress", "not_started", "done", "archived"];
   const archivedRows = rows.filter((r) => r.status === "archived");
   // One cluster sorted by urgency — status first, then soonest ETA. Archived
@@ -155,6 +218,10 @@ export default function HomeDashboard({
     .filter((r) => showArchived || r.status !== "archived")
     .sort(
       (a, b) =>
+        // During a review, what still needs looking at comes first.
+        (reviewMode
+          ? Number(b.project.review_status === "pending") - Number(a.project.review_status === "pending")
+          : 0) ||
         STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) ||
         (a.project.eta ?? "9999").localeCompare(b.project.eta ?? "9999")
     );
@@ -201,14 +268,29 @@ export default function HomeDashboard({
                     : "Nothing in flight yet."}
               </h1>
             </div>
-            {!readOnly && !creating && (
-              <button
-                type="button"
-                onClick={() => setCreating(true)}
-                className="rounded-lg bg-shopee px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-shopee/30 hover:bg-shopee-400"
-              >
-                + New project
-              </button>
+            {!readOnly && (
+              <div className="flex flex-wrap items-center gap-2">
+                {!reviewMode && toReviewIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleStartReview}
+                    disabled={reviewBusy}
+                    title={`Flag your ${toReviewIds.length} incomplete project${toReviewIds.length === 1 ? "" : "s"} as unreviewed until you update them or mark them as having no updates`}
+                    className="rounded-lg border border-navy-600 px-4 py-2.5 text-sm font-bold text-white hover:border-navy-300 hover:bg-navy-900 disabled:opacity-50"
+                  >
+                    {reviewBusy ? "Starting..." : "Start review"}
+                  </button>
+                )}
+                {!creating && (
+                  <button
+                    type="button"
+                    onClick={() => setCreating(true)}
+                    className="rounded-lg bg-shopee px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-shopee/30 hover:bg-shopee-400"
+                  >
+                    + New project
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -232,6 +314,76 @@ export default function HomeDashboard({
           viewableOwners={viewableOwners}
           myViewers={myViewers}
         />
+
+        {reviewMode && (
+          <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-white p-4 ring-2 ring-navy-600">
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                <span className="font-black uppercase tracking-wider text-navy-900">Review mode</span>
+                <span className="font-semibold text-navy-600">
+                  {reviewedCount} of {inReview.length} reviewed
+                </span>
+              </p>
+              <div className="mt-2 h-2 w-full max-w-md overflow-hidden rounded-full bg-navy-50">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all"
+                  style={{ width: `${(reviewedCount / inReview.length) * 100}%` }}
+                />
+              </div>
+              {!readOnly && pendingCount > 0 && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Open each project and run ✨ Smart Notes, or hit{" "}
+                  <span className="font-semibold text-slate-700">No updates ✓</span> on its card if
+                  nothing changed.
+                </p>
+              )}
+            </div>
+            {!readOnly &&
+              (pendingCount === 0 ? (
+                <button
+                  type="button"
+                  onClick={handleEndReview}
+                  disabled={reviewBusy}
+                  className="rounded-lg bg-shopee px-3 py-1.5 text-sm font-bold text-white hover:bg-shopee-600 disabled:opacity-50"
+                >
+                  {reviewBusy ? "Closing..." : "Close review mode"}
+                </button>
+              ) : confirmingEndReview ? (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-slate-600">
+                    {pendingCount} still unreviewed — end anyway?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleEndReview}
+                    disabled={reviewBusy}
+                    className="font-bold text-red-700 hover:underline disabled:opacity-50"
+                  >
+                    Yes, end
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingEndReview(false)}
+                    className="text-slate-500 hover:underline"
+                  >
+                    No
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingEndReview(true)}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  End review early
+                </button>
+              ))}
+          </div>
+        )}
+
+        {reviewError && (
+          <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{reviewError}</p>
+        )}
 
         {googleError && (
           <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{googleError}</p>
@@ -292,6 +444,7 @@ export default function HomeDashboard({
               project={r.project}
               progress={r.progress}
               onArchiveToggle={readOnly ? undefined : handleArchiveToggle}
+              onMarkReviewed={readOnly ? undefined : handleMarkReviewed}
             />
           ))}
         </div>
@@ -309,6 +462,14 @@ export default function HomeDashboard({
           </div>
         )}
       </main>
+      {!readOnly && reviewMode && pendingCount === 0 && !reviewPopupDismissed && (
+        <ReviewCompleteDialog
+          total={inReview.length}
+          closing={reviewBusy}
+          onClose={handleEndReview}
+          onDismiss={() => setReviewPopupDismissed(true)}
+        />
+      )}
     </div>
   );
 }

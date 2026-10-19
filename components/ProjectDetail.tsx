@@ -8,6 +8,9 @@ import { createClient } from "@/lib/supabase/client";
 import { Document, Project, TrackerItem, TrackerItemStatus, resolvePercent } from "@/lib/types";
 import { STATUS_STYLE, EtaLabel } from "@/components/ProjectTile";
 import ChasePicsTag from "@/components/ChasePicsTag";
+import ReviewBadge from "@/components/ReviewBadge";
+import ReviewCompleteDialog from "@/components/ReviewCompleteDialog";
+import { countPending, endReview, markReviewed } from "@/lib/review";
 import { chaseLevel, statusOf } from "@/lib/projectStatus";
 import TrackerTable from "@/components/TrackerTable";
 import Documents from "@/components/Documents";
@@ -63,6 +66,47 @@ export default function ProjectDetail({
   const [restoring, setRestoring] = useState(false);
   const [tipDismissed, dismissTip] = useDismissed("pm-dashboard:smart-notes-tip-dismissed");
   const notesRef = useRef<HTMLElement>(null);
+
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  // Set once this project's review clears the last pending one; holds the
+  // number of projects in the round for the "all reviewed" popup.
+  const [reviewCompleteTotal, setReviewCompleteTotal] = useState<number | null>(null);
+
+  async function handleMarkReviewed() {
+    if (project.review_status !== "pending") return;
+    setReviewBusy(true);
+    setReviewError(null);
+    const error = await markReviewed(supabase, project.id);
+    if (error) {
+      setReviewError(error);
+      setReviewBusy(false);
+      return;
+    }
+    setProject((prev) => ({ ...prev, review_status: "reviewed" }));
+    if ((await countPending(supabase, project.user_id)) === 0) {
+      const { count } = await supabase
+        .from("projects")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", project.user_id)
+        .is("archived_at", null)
+        .eq("review_status", "reviewed");
+      setReviewCompleteTotal(count ?? 1);
+    }
+    setReviewBusy(false);
+  }
+
+  async function handleCloseReview() {
+    setReviewBusy(true);
+    const error = await endReview(supabase, project.user_id);
+    if (error) {
+      setReviewError(error);
+    } else {
+      setProject((prev) => ({ ...prev, review_status: null }));
+      setReviewCompleteTotal(null);
+    }
+    setReviewBusy(false);
+  }
 
   function openSmartNotes() {
     setShowNotesUpdate(true);
@@ -365,6 +409,7 @@ export default function ProjectDetail({
               {style.label}
             </span>
             <ChasePicsTag level={chase} />
+            <ReviewBadge status={project.review_status} />
           </div>
 
           <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
@@ -511,6 +556,42 @@ export default function ProjectDetail({
           <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{googleError}</p>
         )}
         {syncError && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{syncError}</p>}
+        {reviewError && (
+          <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{reviewError}</p>
+        )}
+
+        {!readOnly && project.review_status === "pending" && (
+          <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl bg-white p-4 ring-2 ring-navy-600">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-black uppercase tracking-wider text-navy-900">
+                Review this project
+              </p>
+              <p className="mt-0.5 text-sm text-slate-600">
+                Paste your latest notes into Smart Notes and apply the updates — or, if nothing has
+                changed since last time, mark it reviewed.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleMarkReviewed}
+                disabled={reviewBusy}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-800 disabled:opacity-50"
+              >
+                {reviewBusy ? "Saving..." : "No updates — mark reviewed"}
+              </button>
+              {!showNotesUpdate && (
+                <button
+                  type="button"
+                  onClick={openSmartNotes}
+                  className="rounded-lg bg-shopee px-3 py-1.5 text-sm font-bold text-white hover:bg-shopee-600"
+                >
+                  ✨ Smart Notes
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
           <div className="space-y-5">
@@ -542,7 +623,7 @@ export default function ProjectDetail({
                   ))}
               </div>
 
-              {!readOnly && !showNotesUpdate && !tipDismissed && (
+              {!readOnly && !showNotesUpdate && !tipDismissed && project.review_status !== "pending" && (
                 <div className="mb-3 flex items-start gap-3 rounded-xl bg-navy-50 p-3 text-sm ring-1 ring-navy-200">
                   <span className="text-lg leading-none" aria-hidden>
                     ✨
@@ -584,7 +665,11 @@ export default function ProjectDetail({
                   onAddTrackerItem={handleAddTrackerItemWithStatus}
                   onSaveNotesSnapshot={handleSaveNotesSnapshot}
                   onBackupBeforeApply={handleBackupBeforeApply}
-                  onApplied={() => setShowNotesUpdate(false)}
+                  onApplied={() => {
+                    setShowNotesUpdate(false);
+                    // A Smart Notes update counts as this project's review.
+                    handleMarkReviewed();
+                  }}
                 />
               </div>
             )}
@@ -680,6 +765,14 @@ export default function ProjectDetail({
           </div>
         </div>
       </main>
+      {reviewCompleteTotal !== null && (
+        <ReviewCompleteDialog
+          total={reviewCompleteTotal}
+          closing={reviewBusy}
+          onClose={handleCloseReview}
+          onDismiss={() => setReviewCompleteTotal(null)}
+        />
+      )}
     </div>
   );
 }
