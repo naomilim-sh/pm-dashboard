@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { NotesUpdateProposal, TrackerItem, TrackerItemStatus } from "@/lib/types";
+import { MeetingFollowup, NotesUpdateProposal, TrackerItem, TrackerItemStatus } from "@/lib/types";
+import MeetingNotesMode from "@/components/MeetingNotesMode";
 
 export default function NotesUpdate({
   projectId,
@@ -13,6 +14,10 @@ export default function NotesUpdate({
   onSaveNotesSnapshot,
   onBackupBeforeApply,
   onApplied,
+  followupCount,
+  onSaveFollowups,
+  initialMode = "general",
+  currentReadme,
 }: {
   projectId: string;
   trackerItems: TrackerItem[];
@@ -28,7 +33,12 @@ export default function NotesUpdate({
   onSaveNotesSnapshot: (rawNotes: string) => Promise<void>;
   onBackupBeforeApply: () => Promise<void>;
   onApplied?: () => void;
+  followupCount: number;
+  onSaveFollowups: (followups: MeetingFollowup[]) => Promise<boolean>;
+  initialMode?: "general" | "meeting";
+  currentReadme: string;
 }) {
+  const [mode, setMode] = useState<"general" | "meeting">(initialMode);
   const [notes, setNotes] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -56,7 +66,7 @@ export default function NotesUpdate({
       } else {
         const p: NotesUpdateProposal = body.proposal;
         setProposal(p);
-        setSelectedReadme(Boolean(p.readme_summary));
+        setSelectedReadme(Boolean(p.readme_summary) && p.readme_summary!.trim() !== currentReadme.trim());
         setEditedReadme(p.readme_summary ?? "");
         setSelectedUpdates(new Set(p.tracker_updates.map((_, i) => i)));
         setSelectedNewTasks(new Set(p.new_tasks.map((_, i) => i)));
@@ -121,16 +131,55 @@ export default function NotesUpdate({
     return trackerItems.find((t) => t.id === id)?.task ?? "(unknown task)";
   }
 
+  const readmeChanged = Boolean(
+    proposal?.readme_summary && proposal.readme_summary.trim() !== currentReadme.trim()
+  );
   const nothingProposed =
     proposal &&
     proposal.tracker_updates.length === 0 &&
     proposal.new_tasks.length === 0 &&
-    !proposal.readme_summary;
+    !readmeChanged;
 
   return (
     <div>
-      <h3 className="text-sm font-bold uppercase tracking-wider text-navy-800">✨ Smart Notes</h3>
-      <p className="mb-2 mt-0.5 text-xs text-slate-500">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-navy-800">✨ Smart Notes</h3>
+        <div className="inline-flex rounded-lg bg-white p-0.5 text-xs font-bold ring-1 ring-slate-200" role="tablist">
+          {(
+            [
+              ["general", "General update"],
+              ["meeting", "Meeting follow-ups"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={mode === value}
+              onClick={() => setMode(value)}
+              className={`rounded-md px-2.5 py-1 transition ${
+                mode === value ? "bg-navy-900 text-white" : "text-navy-600 hover:text-navy-900"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {mode === "meeting" ? (
+        <MeetingNotesMode
+          projectId={projectId}
+          existingCount={followupCount}
+          onSave={async (followups) => {
+            const ok = await onSaveFollowups(followups);
+            if (ok) onApplied?.();
+            return ok;
+          }}
+        />
+      ) : (
+        <>
+      <p className="mb-2 text-xs text-slate-500">
         Paste rough notes — bullet points, a chat log, anything. You&apos;ll get a list of proposed
         changes to approve or skip.
       </p>
@@ -154,7 +203,12 @@ export default function NotesUpdate({
 
       {proposal && (
         <div className="mt-4 space-y-4 rounded-md border border-slate-200 bg-slate-50 p-4">
-          {proposal.readme_summary && (
+          {!readmeChanged && (
+            <p className="text-sm text-slate-500">
+              <span className="font-medium text-slate-700">README:</span> no changes needed.
+            </p>
+          )}
+          {readmeChanged && (
             <div className="text-sm">
               <label className="flex items-center gap-2">
                 <input
@@ -237,6 +291,8 @@ export default function NotesUpdate({
             </button>
           )}
         </div>
+      )}
+        </>
       )}
     </div>
   );

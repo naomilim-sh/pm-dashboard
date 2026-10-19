@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import RecoveryLinkHandler from "@/components/RecoveryLinkHandler";
 
 export const metadata: Metadata = {
   title: "PM Dashboard",
@@ -11,7 +12,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <RecoveryLinkHandler />
+        {children}
+      </body>
     </html>
   );
 }

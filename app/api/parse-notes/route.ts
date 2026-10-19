@@ -8,9 +8,9 @@ const TOOL_PARAMETERS = {
   type: "object",
   properties: {
     readme_summary: {
-      type: ["string", "null"],
+      type: "string",
       description:
-        "The FULL replacement README text (markdown), rewritten as a current, concise snapshot — not an addition to append. Null if nothing needs to change.",
+        "The FULL README text (markdown) as a current, concise snapshot — not an addition to append. Always provided: if nothing about it needs to change, return the current README unchanged.",
     },
     tracker_updates: {
       type: "array",
@@ -47,7 +47,9 @@ const TOOL_PARAMETERS = {
       },
     },
   },
-  required: ["tracker_updates", "new_tasks"],
+  // readme_summary is required: when it was optional the model would often
+  // skip it entirely, so the README section silently vanished from proposals.
+  required: ["readme_summary", "tracker_updates", "new_tasks"],
 };
 
 function buildPrompt(
@@ -83,7 +85,7 @@ Compare the new notes to the previous notes and the current tasks — actually d
 1. Which existing tasks (by id) changed status, owner, or deadline based on what's newly written. IMPORTANT: if a task is now finished, set new_status to "done" — it will be *removed* from the tracker entirely (not left sitting there marked done), so the tracker stays a clean list of what's still pending.
 2. Deletions by omission: if a task's topic was described in the *previous* notes but has been removed — no longer mentioned anywhere in the *new* notes — treat that omission itself as a done/resolved signal, even though nothing explicitly says "done" or "finished". These notes represent a full rewritten snapshot each time the PM updates them, so deliberately cutting a chunk means it's no longer active — set new_status to "done" for the corresponding task(s) just as if it had been stated outright. Only hold back on this if the new notes are obviously a short one-off aside about a single unrelated thing rather than a rewritten summary (e.g. much shorter and narrower in scope than the previous notes) — when genuinely unsure, prefer treating a dropped topic as resolved. Tasks that were never mentioned in the previous notes either are simply unrelated to this diff and should be left alone.
 3. Any new action items mentioned in the notes that aren't already tracked as a task — propose them as new tasks.
-4. The README should always read as a current, concise snapshot of what's pending and important — never a dated changelog, and never carrying forward content about a topic that was dropped from the notes per point 2 above. Rewrite it (readme_summary) as the FULL new README text: carry forward anything still relevant, drop or rewrite bullet points about items that are now resolved or removed (don't just keep appending "Update — <date>" sections), and fold in new context/decisions from the notes. Return null only if truly nothing about it needs to change.
+4. The README should always read as a current, concise snapshot of what's pending and important — never a dated changelog, and never carrying forward content about a topic that was dropped from the notes per point 2 above. Always return it (readme_summary) as the FULL README text: carry forward anything still relevant, drop or rewrite bullet points about items that are now resolved or removed (don't just keep appending "Update — <date>" sections), and fold in new context/decisions from the notes. If truly nothing about it needs to change, return the current README exactly as it is.
 
 Do not invent information that isn't in the notes. Every tracker_updates and new_tasks entry needs a short "reason" grounded in the actual note text — for a deletion-by-omission, say so explicitly (e.g. "no longer mentioned in the new notes; was present before").`;
 }

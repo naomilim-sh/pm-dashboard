@@ -28,6 +28,10 @@ create table if not exists public.projects (
   -- Review mode: null = not part of a review, 'pending' = still needs a
   -- look this round, 'reviewed' = updated via Smart Notes or marked "no updates".
   review_status text check (review_status in ('pending', 'reviewed')),
+  -- Meeting follow-ups: short things to clarify after a catch-up, as
+  -- [{ "id": "...", "text": "..." }]. Replaced wholesale by each meeting's notes.
+  meeting_followups jsonb not null default '[]'::jsonb,
+  meeting_followups_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -54,6 +58,8 @@ alter table public.projects add column if not exists backup_created_at timestamp
 alter table public.projects add column if not exists archived_at timestamptz;
 alter table public.projects add column if not exists review_status text
   check (review_status in ('pending', 'reviewed'));
+alter table public.projects add column if not exists meeting_followups jsonb not null default '[]'::jsonb;
+alter table public.projects add column if not exists meeting_followups_at timestamptz;
 alter table public.projects drop column if exists status;
 
 create table if not exists public.tracker_items (

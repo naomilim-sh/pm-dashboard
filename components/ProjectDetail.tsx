@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import { createClient } from "@/lib/supabase/client";
-import { Document, Project, TrackerItem, TrackerItemStatus, resolvePercent } from "@/lib/types";
+import { Document, MeetingFollowup, Project, TrackerItem, TrackerItemStatus, resolvePercent } from "@/lib/types";
 import { STATUS_STYLE, EtaLabel } from "@/components/ProjectTile";
 import ChasePicsTag from "@/components/ChasePicsTag";
 import ReviewBadge from "@/components/ReviewBadge";
@@ -17,6 +17,7 @@ import Documents from "@/components/Documents";
 import SheetSync from "@/components/SheetSync";
 import GoogleConnect from "@/components/GoogleConnect";
 import NotesUpdate from "@/components/NotesUpdate";
+import MeetingFollowups from "@/components/MeetingFollowups";
 import { useDismissed } from "@/lib/useDismissed";
 
 // True when the project has a sheet plus at least one thing to pull from it
@@ -108,7 +109,11 @@ export default function ProjectDetail({
     setReviewBusy(false);
   }
 
-  function openSmartNotes() {
+  const [smartNotesMode, setSmartNotesMode] = useState<"general" | "meeting">("general");
+  const [followupError, setFollowupError] = useState<string | null>(null);
+
+  function openSmartNotes(mode: "general" | "meeting" = "general") {
+    setSmartNotesMode(mode);
     setShowNotesUpdate(true);
     dismissTip();
     requestAnimationFrame(() =>
@@ -221,6 +226,27 @@ export default function ProjectDetail({
     if (!error) {
       setProject((prev) => ({ ...prev, readme }));
     }
+  }
+
+  // Saves the follow-up list. fromMeeting = it came from a Smart Notes
+  // meeting run (which replaces the list and stamps the meeting date), as
+  // opposed to a manual add/edit/delete/convert.
+  async function handleSaveFollowups(next: MeetingFollowup[], fromMeeting = false) {
+    setFollowupError(null);
+    const patch = fromMeeting
+      ? { meeting_followups: next, meeting_followups_at: new Date().toISOString() }
+      : { meeting_followups: next };
+    const { error } = await supabase.from("projects").update(patch).eq("id", project.id);
+    if (error) {
+      setFollowupError(
+        error.message.includes("meeting_followups")
+          ? "Meeting follow-ups need a one-time database update: run the meeting_followups lines from supabase/schema.sql in the Supabase SQL editor."
+          : error.message
+      );
+      return false;
+    }
+    setProject((prev) => ({ ...prev, ...patch }));
+    return true;
   }
 
   async function handleAddTrackerItem(item: {
@@ -583,7 +609,7 @@ export default function ProjectDetail({
               {!showNotesUpdate && (
                 <button
                   type="button"
-                  onClick={openSmartNotes}
+                  onClick={() => openSmartNotes()}
                   className="rounded-lg bg-shopee px-3 py-1.5 text-sm font-bold text-white hover:bg-shopee-600"
                 >
                   ✨ Smart Notes
@@ -610,7 +636,7 @@ export default function ProjectDetail({
                   ) : (
                     <button
                       type="button"
-                      onClick={openSmartNotes}
+                      onClick={() => openSmartNotes()}
                       className="relative rounded-lg bg-shopee px-3 py-1.5 text-sm font-bold text-white shadow-md shadow-shopee/30 hover:bg-shopee-600"
                     >
                       ✨ Smart Notes
@@ -637,7 +663,7 @@ export default function ProjectDetail({
                     </p>
                     <button
                       type="button"
-                      onClick={openSmartNotes}
+                      onClick={() => openSmartNotes()}
                       className="mt-2 font-bold text-shopee hover:text-shopee-700"
                     >
                       Try Smart Notes →
@@ -657,6 +683,11 @@ export default function ProjectDetail({
             {!readOnly && showNotesUpdate && (
               <div className="mb-4 rounded-xl bg-shopee-50/60 p-4 ring-1 ring-shopee-200">
                 <NotesUpdate
+                  key={smartNotesMode}
+                  initialMode={smartNotesMode}
+                  currentReadme={project.readme}
+                  followupCount={project.meeting_followups?.length ?? 0}
+                  onSaveFollowups={(next) => handleSaveFollowups(next, true)}
                   projectId={project.id}
                   trackerItems={trackerItems}
                   onReadmeSave={handleReadmeSave}
@@ -725,6 +756,20 @@ export default function ProjectDetail({
                 )}
               </div>
             )}
+            </section>
+
+            <section className={card}>
+              {followupError && (
+                <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{followupError}</p>
+              )}
+              <MeetingFollowups
+                followups={project.meeting_followups ?? []}
+                updatedAt={project.meeting_followups_at ?? null}
+                readOnly={readOnly}
+                onChange={(next) => handleSaveFollowups(next)}
+                onConvertToTodo={handleAddTrackerItem}
+                onOpenMeetingNotes={() => openSmartNotes("meeting")}
+              />
             </section>
 
             <section className={card}>

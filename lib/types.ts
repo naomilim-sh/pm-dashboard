@@ -28,11 +28,20 @@ export type Project = {
   // Review mode — see supabase/schema.sql. Missing (undefined) until the
   // column has been added to the database.
   review_status?: ReviewStatus;
+  // Meeting follow-ups — see supabase/schema.sql. Also missing until the
+  // columns exist.
+  meeting_followups?: MeetingFollowup[];
+  meeting_followups_at?: string | null;
   created_at: string;
   updated_at: string;
 };
 
 export type ReviewStatus = "pending" | "reviewed" | null;
+
+export type MeetingFollowup = {
+  id: string;
+  text: string;
+};
 
 export type TrackerItemStatus = "todo" | "in_progress" | "done";
 

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-type Mode = "sign_in" | "sign_up" | "forgot" | "set_password";
+type Mode = "sign_in" | "sign_up" | "forgot";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,21 +17,20 @@ export default function LoginPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Someone arriving from a password-reset email lands here with a recovery
-  // session already established by the browser client — switch to the
-  // "choose a new password" form rather than the normal sign-in one.
+  // /auth/confirm sends people back here with ?reset_error=1 when a reset
+  // link is expired or already used; /reset-password links here with
+  // ?forgot=1 to request a fresh one. (Setting the new password itself
+  // happens on /reset-password.)
   useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        setMode("set_password");
-        setError(null);
-        setInfo("Choose a new password for your account.");
-      }
-    });
-    return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("reset_error")) {
+      setMode("forgot");
+      setError(
+        "That reset link has expired or was already used. Request a new one below and open it in this same browser."
+      );
+    } else if (params.get("forgot")) {
+      setMode("forgot");
+    }
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -64,20 +63,12 @@ export default function LoginPage() {
       }
     } else if (mode === "forgot") {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/login`,
+        redirectTo: `${window.location.origin}/auth/confirm?next=/reset-password`,
       });
       if (error) {
         setError(error.message);
       } else {
-        setInfo("Password reset link sent — check your email, then come back here.");
-      }
-    } else {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) {
-        setError(error.message);
-      } else {
-        router.push("/");
-        router.refresh();
+        setInfo("Password reset link sent — check your email and open the link in this browser.");
       }
     }
 
@@ -125,28 +116,14 @@ export default function LoginPage() {
       formTitle: "Reset your password",
       formSub: "Enter the email you signed up with.",
     },
-    set_password: {
-      panel: "bg-navy-800 text-navy-50",
-      eyebrow: "text-shopee-300",
-      kicker: "Almost there",
-      title: "Pick a new password.",
-      blurb: "Once it's saved you'll go straight to your dashboard.",
-      points: [] as string[],
-      button: "bg-navy-800 hover:bg-navy-700 focus-visible:outline-navy-800",
-      ring: "focus:border-navy-600 focus:ring-navy-600/20",
-      formTitle: "Set a new password",
-      formSub: "At least 6 characters.",
-    },
   }[mode];
 
   const submitLabel = {
     sign_in: "Sign in",
     sign_up: "Create account",
     forgot: "Send reset link",
-    set_password: "Save password",
   }[mode];
 
-  const showEmail = mode !== "set_password";
   const showPassword = mode !== "forgot";
 
   function switchMode(next: Mode) {
@@ -213,30 +190,24 @@ export default function LoginPage() {
           <p className="mb-6 mt-1 text-sm text-slate-500">{theme.formSub}</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {showEmail && (
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  {mode === "sign_up" ? "Work email" : "Email"}
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={inputClass}
-                  placeholder="you@example.com"
-                />
-              </div>
-            )}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                {mode === "sign_up" ? "Work email" : "Email"}
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={inputClass}
+                placeholder="you@example.com"
+              />
+            </div>
             {showPassword && (
               <div>
                 <div className="mb-1 flex items-baseline justify-between">
                   <label className="block text-sm font-medium text-slate-700">
-                    {mode === "set_password"
-                      ? "New password"
-                      : mode === "sign_up"
-                        ? "Choose a password"
-                        : "Password"}
+                    {mode === "sign_up" ? "Choose a password" : "Password"}
                   </label>
                   {mode === "sign_in" && (
                     <button
